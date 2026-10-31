@@ -43,6 +43,7 @@ def main():
         if command == "agent":
             p.add_argument("--experiments", type=int, default=3)
             p.add_argument("--minutes", type=float, default=60)
+            p.add_argument("--request", help="The user's request in their own words, shown in the chat")
         if command == "finalize":
             p.add_argument("--confirm-test-once", action="store_true", required=True,
                            help="Freeze model selection and consume final test evaluation")
@@ -57,6 +58,8 @@ def main():
     p.add_argument("task", choices=TASKS)
     p = sub.add_parser("lessons", help="Show GoTrain's memory as another task would recall it")
     p.add_argument("task", choices=TASKS)
+    p = sub.add_parser("ui", help="Chat interface: type a request, watch the agent work")
+    p.add_argument("--port", type=int, default=8765)
     p = sub.add_parser("diary")
     p.add_argument("session", nargs="?", help="Session ID; default is the latest session")
     for command in ("publish-model", "restore-model"):
@@ -86,7 +89,10 @@ def main():
         emit(train(args.task, Recipe(**values), args.hypothesis))
     elif args.command == "agent":
         from .agent import run_agent
-        emit(run_agent(args.task, args.experiments, args.minutes))
+        emit(run_agent(args.task, args.experiments, args.minutes, args.request))
+    elif args.command == "ui":
+        from .server import serve
+        serve(args.port)
     elif args.command == "compare":
         from .store import list_runs
         emit(list_runs(args.task))

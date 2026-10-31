@@ -9,10 +9,10 @@ from .config import Recipe, task_info, runs_root
 from .store import append_event, best_run, list_runs, now, write_json
 
 
-def run_agent(task, experiments=3, minutes=60):
+def run_agent(task, experiments=3, minutes=60, request=None):
     from strands import Agent, tool
     from strands.models import BedrockModel
-    from . import artifacts, data, diagnose, diary, engine, lessons
+    from . import data, diagnose, diary, engine, lessons, registry
 
     if not 1 <= experiments <= 12 or not 1 <= minutes <= 480:
         raise ValueError("Use 1–12 experiments and 1–480 minutes")
@@ -142,18 +142,18 @@ def run_agent(task, experiments=3, minutes=60):
     def publish_best_model() -> dict:
         """Publish best validation checkpoint and versioned logs to filesystem and optional GOTRAIN_S3_BUCKET."""
         chosen = best_run(task)
-        return record("publish_best_model", {}, artifacts.publish_model(task, chosen["run_id"], os.environ.get("GOTRAIN_S3_BUCKET")))
+        return record("publish_best_model", {}, registry.act("publish-model", task, chosen["run_id"]))
 
     @tool
     def publish_dataset() -> dict:
         """Upload the selected dataset archive to versioned filesystem storage and optional GOTRAIN_S3_BUCKET."""
-        return record("publish_dataset", {}, artifacts.publish_dataset(task, os.environ.get("GOTRAIN_S3_BUCKET")))
+        return record("publish_dataset", {}, registry.act("publish-data", task))
 
     @tool
     def verify_model_download() -> dict:
         """Download a previously published best model and verify every artifact checksum."""
         chosen = best_run(task)
-        return record("verify_model_download", {}, artifacts.restore_model(task, chosen["run_id"], os.environ.get("GOTRAIN_S3_BUCKET")))
+        return record("verify_model_download", {}, registry.act("restore-model", task, chosen["run_id"]))
 
     system = f"""You are GoTrain, an autonomous GEO-Bench ML scientist.
 Work ONLY on {task}, a {info['kind']} task. Inspect the data before training.
@@ -188,6 +188,7 @@ Finish with observed scores, each hypothesis and its verdict, limitations, and t
 the training history is authoritative. Do not claim the 75% historical baseline is beaten unless measured.
 """
     append_event(log, "session_started", task=task, kind=info["kind"], experiments=experiments, minutes=minutes,
+                 request=request,
                  system_prompt=system, model=os.environ.get("GOTRAIN_BEDROCK_MODEL", "eu.anthropic.claude-sonnet-5-5"))
     model = BedrockModel(
         model_id=os.environ.get("GOTRAIN_BEDROCK_MODEL", "eu.anthropic.claude-sonnet-5-5"),

@@ -14,6 +14,29 @@ for all four tasks or a complete submission bundle. If final tests have already
 been run in SageMaker, recover and verify their original outputs rather than
 running them again. Never present validation metrics as test results.
 
+## Chat interface
+
+```bash
+python -m gotrain ui            # starts on port 8765
+```
+
+On SageMaker, take your JupyterLab address and replace its ending with `/proxy/8765/`
+(for example `https://…/jupyterlab/default/proxy/8765/`). Type a request in plain words:
+*"Train the best solar-panel segmentation model in 30 minutes"*. GoTrain reads the task,
+the minutes and the number of experiments (it asks a question when the task is unclear),
+starts the agent, and streams every step as a chat message: inspection, recalled lessons,
+hypotheses, diagnoses with pictures, kept/rejected verdicts, the before → after showcase
+and what it learned. Past sessions are in the sidebar; links like `?session=…` reopen one.
+
+The **Model registry** view lists every version of every task with its validation score,
+lineage (warm start / inference variant), checksum and status badges (best, published,
+verified, frozen for test). Buttons publish or restore-and-verify models and datasets
+through the same filesystem/S3 code the agent uses, and each action, including failures,
+is logged to `registry-events.jsonl` and shown in a storage activity timeline.
+
+The UI only starts agent sessions; it has no test-split action. Without the server,
+each session's `diary.html` is a saved, read-only copy of the same chat.
+
 ## The AI-scientist loop
 
 GoTrain does not only tune numbers; it investigates why a model fails and tests a fix:
