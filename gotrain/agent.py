@@ -112,7 +112,6 @@ the training history is authoritative. Do not claim the 75% historical baseline 
     model = BedrockModel(
         model_id=os.environ.get("GOTRAIN_BEDROCK_MODEL", "eu.anthropic.claude-sonnet-5-5"),
         region_name=os.environ.get("AWS_REGION", "eu-central-1"),
-        temperature=0.2,
     )
     agent = Agent(model=model, system_prompt=system,
                   tools=[inspect_dataset, run_experiment, compare_experiments,
@@ -130,3 +129,4 @@ the training history is authoritative. Do not claim the 75% historical baseline 
         write_json(directory / "messages.json", agent.messages)
         append_event(log, "session_failed", error=repr(error))
         raise
+
