@@ -23,6 +23,58 @@ For the interactive chat and registry, run `python -m gotrain ui` and open
 JupyterLab's `/proxy/8765/` route. Existing finalized tasks remain frozen;
 use their recorded evidence rather than launching training or final evaluation.
 
+### ✅ Rabih: remaining checklist before the presentation
+
+Everything below is safe after the final tests: no training, no test-split access.
+Run it in the Jupyter terminal after the update commands above.
+
+1. **Give GoTrain its memory from the real runs** (reads saved records only):
+
+   ```bash
+   for t in m-eurosat m-pv4ger m-pv4ger-seg m-nz-cattle; do python -m gotrain learn $t; done
+   python -m gotrain lessons m-nz-cattle      # check what it learned
+   ```
+
+2. **Diagnose each selected model on validation data**, for the "what it still gets wrong"
+   slide (short GPU inference, validation split only, writes `diagnosis.json` + images):
+
+   ```bash
+   for t in m-eurosat m-pv4ger m-pv4ger-seg m-nz-cattle; do python -m gotrain diagnose $t; done
+   python -m gotrain showcase m-pv4ger-seg    # first vs best model on the same images
+   python -m gotrain showcase m-nz-cattle
+   ```
+
+3. **Open the chat UI and the registry** for the extra-points demo:
+
+   ```bash
+   python -m gotrain ui
+   ```
+
+   Open the JupyterLab address with its ending replaced by `/proxy/8765/`.
+   In **🗄️ Model registry**, press **Publish**, then **Restore & verify**, on the BEST
+   version of each task. The storage activity timeline is the evidence for the
+   "upload/download and model versions" extra points. Take screenshots.
+   *Do not type training requests for the four frozen tasks; they are locked by design.*
+
+4. **S3 (extra points)**: ask RASID for an approved bucket. If they give one:
+
+   ```bash
+   export GOTRAIN_S3_BUCKET=THE_PROVIDED_BUCKET
+   python -m gotrain ui      # the registry then shows "S3 connected"; repeat step 3
+   ```
+
+   Without a bucket, say in the presentation that S3 code exists but is unverified.
+
+5. **Rebuild the demo dashboard** so it includes the new evidence, then check it
+   (command under **Simple demo interface**).
+
+6. **Presentation**: add one slide each for the AI-scientist loop (diagnose → hypothesis
+   → kept/rejected), the cross-task memory, and the chat + registry screenshots. State
+   clearly that the final scores came from runs made **before** these features.
+
+7. **Never**: run `finalize` again, delete `final-selection.json` / `test-started.json`,
+   create a new run root, or commit checkpoints, datasets or credentials.
+
 An autonomous geospatial model training agent for the AUB ACM × RASID hackathon.
 Give it a GEO-Bench task and a compute budget. A single Strands agent on Amazon
 Bedrock inspects the dataset, chooses a recipe, runs training tools, compares
