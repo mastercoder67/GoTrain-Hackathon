@@ -5,13 +5,14 @@ Give it a GEO-Bench task and a compute budget. A single Strands agent on Amazon
 Bedrock inspects the dataset, chooses a recipe, runs training tools, compares
 validation experiments, and publishes the best version with an auditable history.
 
-**Status:** implementation includes classification, segmentation, agent tools,
-artifact storage, validation reports, MCP adapter and tests. Real GPU runs and
-the four final test evaluations must be performed on the team's SageMaker instance.
-No benchmark results are fabricated. The earlier manually run EuroSAT CNN reached
-**75% validation accuracy** in five epochs (user-reported; not a final test score).
-Beating the instructor's reference requires its exact scores, metrics and protocol;
-neither this implementation nor pretrained weights guarantee that outcome.
+**Status (31 October 2026):** the core implementation is pushed to `main`.
+The repository contains a five-epoch manual EuroSAT baseline (75.00% validation
+accuracy) and three GPU validation experiments for `m-eurosat`; the best recorded
+validation accuracy is **97.10%**. These are validation results, not final test
+scores. The current GitHub tree does not contain final `test-result.json` files
+for all four tasks or a complete submission bundle. If final tests have already
+been run in SageMaker, recover and verify their original outputs rather than
+running them again. Never present validation metrics as test results.
 
 ## The four tasks
 
@@ -293,3 +294,186 @@ execution, S3 permissions, and the instructor's baseline comparison separately.
 * [GEO-Bench data](https://huggingface.co/datasets/recursix/geo-bench-1.0)
 * [Strands Python quickstart](https://strandsagents.com/docs/user-guide/sdk/quickstart/python/)
 * [Torchvision ResNet18](https://docs.pytorch.org/vision/main/models/generated/torchvision.models.resnet18.html)
+
+
+## Team handoff — 31 October 2026
+
+This section is the working handoff for the remaining hackathon work. The code and
+experiment metadata already committed to `main` should be preserved; continue from
+the existing implementation rather than rebuilding the project.
+
+### What is already implemented and pushed
+
+- GEO-Bench task support for EuroSAT classification, PV4GER classification,
+  PV4GER segmentation and NZ cattle segmentation.
+- A Strands-based autonomous agent with bounded experiment tools, explicit
+  hypotheses, experiment comparison and best-validation-checkpoint publishing.
+- Training and validation pipelines, ResNet-based classification, U-Net-style
+  segmentation, aligned image/mask augmentation, train-only normalization,
+  dataset-level confusion-matrix metrics and reproducibility metadata.
+- Experiment history, immutable run IDs, checksummed checkpoints, warm-start
+  fine-tuning, validation-only TTA comparison, HTML report generation and
+  submission export.
+- Filesystem artifact storage, optional S3 upload/download integration, an MCP
+  stdio adapter for GoPilot integration, test-once finalization safeguards,
+  automated tests and a GitHub Actions CPU workflow.
+- The latest code commit on `main` at the time of this handoff is
+  `fb640e8b9f8af2776e52fbfe3665dee0c352bcf2`
+  (`Validate inference averaging and preserve input precision through final evaluation`).
+
+### Results that are actually present in GitHub
+
+All entries below are **validation** results. None is a final benchmark test score.
+
+| Evidence | Run / setup | Validation accuracy | Macro F1 | Mean IoU |
+|---|---|---:|---:|---:|
+| Manual EuroSAT baseline | 5 epochs | 75.00% | — | — |
+| Pretrained ResNet18 | `20261031T120129_a50b2160`, best epoch 13 | 96.80% | 96.79% | 93.86% |
+| Longer ResNet18 | `20261031T120752_e6ef7de9`, best epoch 20 | **97.10%** | **97.09%** | **94.42%** |
+| Pretrained ResNet34 | `20261031T121704_3f24ccc8`, best epoch 13 | 95.90% | 95.88% | 92.20% |
+
+The three experiment summaries, configs, histories and normalization metadata are
+under `results/validation-eurosat/`. The manual baseline history is
+`results/eurosat-baseline.json`. The 97.10% result is the best recorded EuroSAT
+validation result in this repository; it is not evidence of a final test score or
+proof that the instructor's reference has been beaten.
+
+### What is not yet published in the repository
+
+The current GitHub tree does not include the following deliverables:
+
+- Final test result files for all four GEO-Bench tasks.
+- A complete `submission/` export containing the final scores and agent-session logs.
+- The generated HTML reports and prediction examples for the final selected runs.
+- The final presentation/slide deck.
+- Real S3 round-trip evidence or a confirmed GoPilot deployment through RASID.
+
+Some of these may exist in the SageMaker workspace. Export and verify them before
+marking them complete. Checkpoint weights, datasets, credentials and large archives
+must remain outside Git; publish their checksummed manifests and approved small
+reports/logs instead. The current `.gitignore` intentionally excludes model weights
+and datasets.
+
+### Ownership: two workstreams
+
+**Workstream A — Charbel and Marwa: benchmark experiments**
+
+- **Charbel — classification:** sync the SageMaker environment; review the three
+  committed EuroSAT validation runs and their configs; confirm the instructor's
+  reference score, metric definition, data split and allowed pretraining; then run
+  and compare the `m-pv4ger` classification task. Do not rerun EuroSAT final test
+  evaluation if its once-only test marker already exists.
+- **Marwa — segmentation:** run and compare `m-pv4ger-seg` and `m-nz-cattle`
+  sequentially on the shared T4. Check foreground IoU, mean IoU, per-class metrics
+  and visual prediction examples. Confirm that masks are aligned and that reported
+  IoU is computed from the dataset-wide confusion matrix.
+
+**Workstream B — Rabih: integration, verification and release**
+
+- Pull the latest `main`, run the environment/QA commands below, and resolve any
+  integration failures without deleting existing runs or test-once markers.
+- Verify run IDs, checkpoint SHA-256 hashes, metrics and confusion matrices against
+  the original SageMaker artifacts. Recover any already-completed final test outputs;
+  do not repeat a test evaluation just to recreate a missing report.
+- Once all development and validation choices are frozen, coordinate the one-time
+  finalization of any task that has not yet been tested. Generate reports, run
+  `export`, check the submission's missing-task list, and assemble the final
+  presentation from verified results only.
+- Confirm the real S3 bucket/role with RASID before testing S3. Confirm the required
+  transport and authentication with RASID before describing the MCP adapter as a
+  completed GoPilot deployment.
+
+The single T4 must be used **sequentially** for model training/evaluation. Coordinate
+GPU runs rather than launching multiple training jobs at once.
+
+### Exact continuation sequence
+
+1. In SageMaker, activate the existing environment and sync the repository:
+
+   ```bash
+   source ~/gotrain-env/bin/activate
+   cd ~/GoTrain-Hackathon
+   git pull --rebase origin main
+   python -m pip install -e '.[dev]'
+   python -m pip check
+   ```
+
+2. Verify the environment and current code before starting new experiments:
+
+   ```bash
+   python -m gotrain doctor
+   python -m pytest -q
+   python -m gotrain smoke
+   ```
+
+   `tests/test_workflow.py` currently contains 16 test functions. The earlier
+   verification record in `VALIDATION.md` documents 14 passing checks for the
+   initial implementation; rerun the current suite and record its actual result.
+   Do not report 18 passing tests unless that exact run is available.
+
+3. Inspect the existing EuroSAT runs before changing anything:
+
+   ```bash
+   python -m gotrain inspect m-eurosat
+   python -m gotrain compare m-eurosat
+   python -m gotrain report m-eurosat
+   ```
+
+   The best recorded validation run is currently
+   `20261031T120752_e6ef7de9` at 97.10%. Keep its original run and checkpoint
+   intact. Compare any refinement on validation data only.
+
+4. Prepare and run the remaining tasks one at a time:
+
+   ```bash
+   python -m gotrain prepare m-pv4ger
+   python -m gotrain agent m-pv4ger --experiments 3 --minutes 60
+   python -m gotrain compare m-pv4ger
+   python -m gotrain report m-pv4ger
+
+   python -m gotrain prepare m-pv4ger-seg
+   python -m gotrain agent m-pv4ger-seg --experiments 3 --minutes 90
+   python -m gotrain compare m-pv4ger-seg
+   python -m gotrain report m-pv4ger-seg
+
+   python -m gotrain prepare m-nz-cattle
+   python -m gotrain agent m-nz-cattle --experiments 3 --minutes 90
+   python -m gotrain compare m-nz-cattle
+   python -m gotrain report m-nz-cattle
+   ```
+
+   Adjust batch size/image size only when GPU memory requires it, and record the
+   exact recipe and reason. Do not tune against test data.
+
+5. Before final evaluation, confirm with the team whether a task's test split has
+   already been opened. The application intentionally blocks a second finalization.
+   If a final test has already run, recover its original result and evidence; do not
+   remove markers, create a new run root, or rerun it. For tasks not yet finalized,
+   freeze the selected validation checkpoint first, then run each exactly once:
+
+   ```bash
+   python -m gotrain finalize m-eurosat --confirm-test-once
+   python -m gotrain finalize m-pv4ger --confirm-test-once
+   python -m gotrain finalize m-pv4ger-seg --confirm-test-once
+   python -m gotrain finalize m-nz-cattle --confirm-test-once
+   python -m gotrain export --out submission
+   ```
+
+6. Inspect `submission/scores.json`. It must list all four task results and have
+   `"complete": true` before calling the benchmark submission complete. Keep the
+   reports, configs, histories, session logs and checksums together. Review them
+   for credentials or private information before sharing.
+
+7. Finish the presentation with: challenge/problem, agent architecture, experiment
+   workflow, classification evidence, segmentation examples, the four final test
+   results and exact metrics, artifact/versioning evidence, MCP/GoPilot integration
+   status, and limitations. Use only results found in the exported evidence.
+
+### Important safeguards
+
+- Training/tuning uses `train` and `valid`; never use `test` to choose a model.
+- Do not compare accuracy, foreground IoU or mean IoU as if they were the same metric.
+- Do not claim S3 or GoPilot production integration until tested with RASID's actual
+  approved bucket, role, transport and authentication.
+- Never commit AWS credentials, API keys, datasets, checkpoints or large archives.
+- Preserve the existing baseline, run directories, checkpoints and final-test markers.
