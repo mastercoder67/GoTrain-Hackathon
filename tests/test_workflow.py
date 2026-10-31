@@ -217,3 +217,18 @@ def test_s3_dataset_roundtrip_with_fake_service(tmp_path, monkeypatch):
     restored = artifacts.restore_dataset("m-eurosat", bucket="test-bucket")
     assert restored["verified"]
     assert (Path(restored["path"]) / "task_specs.pkl").exists()
+
+
+def test_warm_start_preserves_preprocessing_and_lineage(fake_benchmark):
+    first = engine.train("m-pv4ger", Recipe(model="small", pretrained=False, epochs=1,
+                         image_size=64, batch_size=2, stats_samples=4))
+    second = engine.train("m-pv4ger", Recipe(model="small", pretrained=False, epochs=1,
+                          image_size=64, batch_size=2, warm_start=first["run_id"], learning_rate=0.0001))
+    parent = run_dir("m-pv4ger", first["run_id"])
+    child = run_dir("m-pv4ger", second["run_id"])
+    assert read_json(parent / "normalization.json") == read_json(child / "normalization.json")
+    assert read_json(child / "config.json")["warm_start_sha256"] == first["checkpoint_sha256"]
+    with pytest.raises(ValueError, match="retain model"):
+        engine.train("m-pv4ger", Recipe(model="resnet18", pretrained=False, epochs=1,
+                     image_size=64, warm_start=first["run_id"]))
+    assert "test" not in fake_benchmark

@@ -114,10 +114,32 @@ def _train(task, recipe, hypothesis):
         seed_all(recipe.seed)
         if device.type == "cuda":
             torch.cuda.reset_peak_memory_stats()
-        stats = training_statistics(task, recipe.image_size, recipe.stats_samples, recipe.seed)
+        warm = None
+        if recipe.warm_start:
+            previous = run_dir(task, recipe.warm_start)
+            previous_summary = read_json(previous / "summary.json")
+            if previous_summary["status"] != "completed":
+                raise ValueError("Warm start requires a completed validation run")
+            checksum = sha256(previous / "best.pt")
+            if checksum != previous_summary["checkpoint_sha256"]:
+                raise RuntimeError("Warm-start checkpoint checksum mismatch")
+            warm = torch.load(previous / "best.pt", map_location="cpu", weights_only=True)
+            prior_recipe = warm["config"]["recipe"]
+            if any(prior_recipe[k] != getattr(recipe, k) for k in ("model", "image_size")):
+                raise ValueError("Warm start must retain model and image_size")
+            if warm["config"]["dataset"] != config["dataset"]:
+                raise ValueError("Warm-start dataset fingerprint mismatch")
+            stats = warm["normalization"]
+            config["warm_start_sha256"] = checksum
+            write_json(directory / "config.json", config)
+        else:
+            stats = training_statistics(task, recipe.image_size, recipe.stats_samples, recipe.seed)
         write_json(directory / "normalization.json", stats)
         train_loader, valid_loader = loaders(task, recipe, stats)
-        model = build_model(recipe, len(stats["mean"]), info["classes"], info["kind"]).to(device)
+        model = build_model(recipe, len(stats["mean"]), info["classes"], info["kind"], warm is None).to(device)
+        if warm is not None:
+            model.load_state_dict(warm["state_dict"])
+            del warm
         optimizer = torch.optim.AdamW(model.parameters(), lr=recipe.learning_rate, weight_decay=recipe.weight_decay)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=recipe.epochs)
         amp = recipe.amp and device.type == "cuda"

@@ -44,6 +44,8 @@ def run_agent(task, experiments=3, minutes=60):
                 Fields: pretrained, epochs (1-100), batch_size (2-128), image_size (64-512),
                 learning_rate, weight_decay, augmentation, balanced_loss, dice (segmentation only),
                 seed, workers (0-8), patience, stats_samples, amp, max_minutes.
+                warm_start: optional completed run ID to fine-tune its best checkpoint.
+                A warm start must retain the same model and image_size.
             hypothesis: A short testable reason for the chosen change, tied to observations.
         """
         nonlocal attempts
@@ -101,6 +103,8 @@ For segmentation start image_size=256, batch_size=8, dice=true; for classificati
 image_size=128, batch_size=32. Set workers=2 to overlap dataset reading with GPU computation.
 Start learning_rate=0.0003, epochs=15, augmentation=true.
 For severe imbalance test balanced_loss. Keep the seed fixed for comparable experiments.
+When a strong run is still improving, consider warm_start with its run ID and a lower learning_rate
+instead of restarting from pretrained weights. Keep model and image_size unchanged for warm starts.
 You have at most {experiments} training attempts and {minutes} minutes (soft limit, validation finishes).
 Call tools sequentially. On budget_exhausted, do not call run_experiment again.
 After training, compare experiments, publish the best model, and verify its download.

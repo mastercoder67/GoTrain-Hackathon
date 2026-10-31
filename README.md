@@ -113,6 +113,12 @@ encoder with U-Net-style skip connections and a newly initialized decoder.
 
 Use a recipe file for a manual experiment:
 
+The optional `warm_start` field takes a completed run ID from the same task. It
+fine-tunes that run's best validation checkpoint, preserving its normalization,
+model architecture and image size. A new run records the parent checkpoint hash.
+The optimizer restarts with the new recipe; this is fine-tuning rather than exact
+optimizer-state resumption.
+
 ```json
 {
   "model": "resnet18",

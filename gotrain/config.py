@@ -47,6 +47,7 @@ class Recipe:
     stats_samples: int = 128
     amp: bool = True
     max_minutes: float = 30.0
+    warm_start: str | None = None
 
     def validate(self, kind):
         if self.model not in {"small", "resnet18", "resnet34"}:
