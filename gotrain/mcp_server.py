@@ -35,6 +35,13 @@ def diagnose_model(task: str, run_id: str = "") -> dict:
 
 
 @mcp.tool()
+def recall_lessons(task: str) -> dict:
+    """GoTrain's cross-task memory: measured lessons, a lever scoreboard and similar tasks' best recipes."""
+    from .lessons import recall
+    return recall(task)
+
+
+@mcp.tool()
 def compare_models(task: str) -> dict:
     """Return development results, with the model chosen by validation only."""
     return {"runs": list_runs(task), "best": best_run(task)}

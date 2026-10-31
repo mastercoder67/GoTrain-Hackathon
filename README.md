@@ -1,18 +1,42 @@
 # GoTrain — train, measure, improve
 
+## Final version
+
+`main` is the final release branch. It includes the AI-scientist loop,
+cross-task memory, chat and model registry, and the offline demo dashboard.
+
+On the existing SageMaker environment:
+
+```bash
+source ~/gotrain-env/bin/activate
+cd ~/GoTrain-Hackathon
+git switch main
+git pull --ff-only origin main
+python -m pip install -e '.[dev]'
+python -m pytest -q
+```
+
+For the completed hackathon demo, open `~/gotrain-demo.html` in JupyterLab.
+It shows recorded agent decisions, validation examples and the original final
+scores. Rebuild it with the command under **Simple demo interface** below.
+For the interactive chat and registry, run `python -m gotrain ui` and open
+JupyterLab's `/proxy/8765/` route. Existing finalized tasks remain frozen;
+use their recorded evidence rather than launching training or final evaluation.
+
 An autonomous geospatial model training agent for the AUB ACM × RASID hackathon.
 Give it a GEO-Bench task and a compute budget. A single Strands agent on Amazon
 Bedrock inspects the dataset, chooses a recipe, runs training tools, compares
 validation experiments, and publishes the best version with an auditable history.
 
-**Status (31 October 2026):** the core implementation is pushed to `main`.
-The repository contains a five-epoch manual EuroSAT baseline (75.00% validation
-accuracy) and three GPU validation experiments for `m-eurosat`; the best recorded
-validation accuracy is **97.10%**. These are validation results, not final test
-scores. The current GitHub tree does not contain final `test-result.json` files
-for all four tasks or a complete submission bundle. If final tests have already
-been run in SageMaker, recover and verify their original outputs rather than
-running them again. Never present validation metrics as test results.
+**Status (31 October 2026):** all four tasks have original final test results
+in the team SageMaker workspace. The verified export reports `complete: true`
+and `missing_tasks: []`; its logs, presentation and offline demo are prepared
+separately from this source repository. The committed EuroSAT files under
+`results/validation-eurosat/` are validation evidence, not final test results.
+The scored runs predate the AI-scientist and memory/chat additions. Do not
+attribute those scores to newer features or repeat the once-only final tests.
+Filesystem model restore is verified. Real S3 transfer and GoPilot deployment
+remain unverified.
 
 ## Simple demo interface
 
@@ -33,6 +57,29 @@ evaluate a benchmark split. The software checks shown in the UI are recorded
 outputs; use `pytest` and `gotrain smoke` in the terminal for a fresh check.
 Regenerate the page after exporting new evidence.
 
+## Chat interface
+
+```bash
+python -m gotrain ui            # starts on port 8765
+```
+
+On SageMaker, take your JupyterLab address and replace its ending with `/proxy/8765/`
+(for example `https://…/jupyterlab/default/proxy/8765/`). Type a request in plain words:
+*"Train the best solar-panel segmentation model in 30 minutes"*. GoTrain reads the task,
+the minutes and the number of experiments (it asks a question when the task is unclear),
+starts the agent, and streams every step as a chat message: inspection, recalled lessons,
+hypotheses, diagnoses with pictures, kept/rejected verdicts, the before → after showcase
+and what it learned. Past sessions are in the sidebar; links like `?session=…` reopen one.
+
+The **Model registry** view lists every version of every task with its validation score,
+lineage (warm start / inference variant), checksum and status badges (best, published,
+verified, frozen for test). Buttons publish or restore-and-verify models and datasets
+through the same filesystem/S3 code the agent uses, and each action, including failures,
+is logged to `registry-events.jsonl` and shown in a storage activity timeline.
+
+The UI only starts agent sessions; it has no test-split action. Without the server,
+each session's `diary.html` is a saved, read-only copy of the same chat.
+
 ## The AI-scientist loop
 
 GoTrain does not only tune numbers; it investigates why a model fails and tests a fix:
@@ -52,6 +99,35 @@ inspect → baseline → diagnose errors → one targeted hypothesis → train �
 
 Rejected hypotheses stay in the diary and logs; they are evidence too. All of this
 uses the validation split only.
+
+### GoTrain remembers: lessons across tasks
+
+Every experiment adds a lesson to `~/gotrain-runs/v1/lessons.jsonl`: the recipe
+change compared with the best run it had to beat, and the measured validation
+change (`kept`, `rejected` or `failed`). These are derived from run records, not
+written by the model. At the end of a session the agent adds 1–3 insights with
+`record_lesson`; each must cite run IDs from that task or it is refused.
+
+On the next task the agent calls `recall_lessons` first. It receives the lessons
+(same problem type first), a scoreboard of which changes helped how often, and
+the winning recipe of each similar task as a first experiment to try. Lessons from
+another dataset are hypotheses to re-test, never results for the new one.
+
+Real example from this repository's EuroSAT runs:
+
+```text
+m-eurosat: epochs 15→25 + patience 6→8 · accuracy 0.9680 → 0.9710 (+0.0030) · kept
+m-eurosat: epochs 25→15 + model resnet18→resnet34 + patience 8→6 · accuracy 0.9710 → 0.9590 (-0.0120) · rejected
+```
+
+```bash
+python -m gotrain learn m-eurosat      # turn existing runs into lessons (safe to repeat)
+python -m gotrain lessons m-pv4ger     # what the agent will recall on its next task
+```
+
+Run the tasks in an order that lets memory help: EuroSAT → PV4GER, then
+PV4GER-seg → NZ cattle. The diary shows recalled lessons (📚), new insights (💡)
+and the "What GoTrain has learned" scoreboard. `export` includes `lessons.jsonl`.
 
 ```bash
 python -m gotrain agent m-pv4ger-seg --experiments 3 --minutes 30

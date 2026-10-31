@@ -59,11 +59,15 @@ def new_run(task):
     return run_id, path
 
 
+def created_at(path):
+    config = path.parent / "config.json"
+    return read_json(config).get("created_at", "") if config.exists() else ""
+
+
 def list_runs(task):
-    rows = []
-    for path in sorted(task_dir(task).glob("*/summary.json")):
-        rows.append(read_json(path))
-    return rows
+    # Chronological by recorded creation time; run IDs only have one-second resolution.
+    paths = sorted(task_dir(task).glob("*/summary.json"), key=lambda p: (created_at(p), p.parent.name))
+    return [read_json(path) for path in paths]
 
 
 def best_run(task):
