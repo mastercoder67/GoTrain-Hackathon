@@ -1,0 +1,49 @@
+{
+  "task": "m-eurosat",
+  "run_id": "20261031T120752_e6ef7de9",
+  "recipe": {
+    "model": "resnet18",
+    "pretrained": true,
+    "epochs": 25,
+    "batch_size": 32,
+    "image_size": 128,
+    "learning_rate": 0.0003,
+    "weight_decay": 0.0001,
+    "augmentation": true,
+    "balanced_loss": false,
+    "dice": false,
+    "seed": 42,
+    "workers": 0,
+    "patience": 8,
+    "stats_samples": 128,
+    "amp": true,
+    "max_minutes": 23.558200102233332
+  },
+  "hypothesis": "Best epoch was 13/15, so the model may still be improving; training longer (25 epochs) with other settings fixed may help.",
+  "created_at": "2026-10-31T12:07:52.524138+00:00",
+  "provenance": {
+    "git_commit": "c82b0f6d302eaf2ee59bf37caddb3337c4c627f1",
+    "working_tree_dirty": false,
+    "versions": {
+      "torch": "2.7.1+cu126",
+      "torchvision": "0.22.1+cu126",
+      "geobench": "1.1.0",
+      "strands-agents": "1.63.0",
+      "numpy": "2.5.4"
+    },
+    "cuda": "12.6",
+    "gpu": "Tesla T4"
+  },
+  "dataset": {
+    "task_specs.pkl": "739502688693a3ba23f0f73744407eab79690560396bf5b91e46d75ba939f011",
+    "0.01x_train_partition.json": "23144ae68e0c8a165b594ab6dcb5a1de429934084abd2106cae8c418fa1fff4d",
+    "0.02x_train_partition.json": "95afb464ec5b4fbb542802e87eff1f45f1e642c916b9592500ecc8fe0fd0288a",
+    "0.05x_train_partition.json": "78561020fc64c23ef3d283ff2fa23bee26c08294a9fa6412a703ebead86b2fbd",
+    "0.10x_train_partition.json": "08347e84b11144bee1dae5a9605ef7f68777152acf003aa9a83377a5d02c3c2d",
+    "0.20x_train_partition.json": "635f44f33bfb4439df40e5f680bee3eb8e3b4305f0e6e91bbdcff35ce10ff0d5",
+    "0.50x_train_partition.json": "ca829c0509432fb24ae425dce95e9d4222f654c4d38c20e93815fc12646c3041",
+    "1.00x_train_partition.json": "e1b68b74fdfcffbcbf35c7bc5ceb4ca94cd8bf0b31775f69feb628d3c2afa3ab",
+    "default_partition.json": "2a27f538ec717f0744e0d4e5bcbbeb92fdd7d9a4a4c223c09285c314847a1475"
+  },
+  "selection_metric": "accuracy"
+}
