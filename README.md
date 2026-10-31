@@ -1,5 +1,10 @@
 # GoTrain — train, measure, improve
 
+> **📄 [Technical report (PDF)](report/GoTrain-report.pdf)** · **🎬 [Demo video, 2.5 min (MP4)](demo/GoTrain-demo.mp4)** · [Report source (LaTeX)](report/gotrain-report.tex)
+>
+> Final test scores, each test split opened once: EuroSAT **95.7%** accuracy · PV4GER **97.9%** accuracy ·
+> PV4GER-seg **0.951** mean IoU · NZ cattle **0.844** mean IoU.
+
 ## Final version
 
 `main` is the final release branch. It includes the AI-scientist loop,
