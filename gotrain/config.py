@@ -50,6 +50,7 @@ class Recipe:
     warm_start: str | None = None
     cache: bool = True
     tta: bool = False
+    focus_crops: bool = False
 
     def validate(self, kind):
         if self.model not in {"small", "resnet18", "resnet34"}:
@@ -68,6 +69,8 @@ class Recipe:
             raise ValueError("max_minutes must be in (0, 240]")
         if kind == "classification" and self.dice:
             raise ValueError("Dice loss is for segmentation only")
+        if kind == "classification" and self.focus_crops:
+            raise ValueError("focus_crops is for segmentation only")
         return self
 
     def to_dict(self):

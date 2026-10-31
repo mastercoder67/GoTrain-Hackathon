@@ -169,13 +169,31 @@ def validation_uses_half_inputs(task, config, channels):
 
 
 class GeoDataset(Dataset):
-    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False, cache=None, quantize_inputs=False):
+    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False, cache=None, quantize_inputs=False,
+                 focus_crops=False):
         self.raw, self.kind, self.size = raw, kind, size
         self.mean = torch.tensor(stats["mean"])[:, None, None]
         self.std = torch.tensor(stats["std"])[:, None, None]
         self.augment, self.native_mask = augment, native_mask
         self.cache = cache
         self.quantize_inputs = quantize_inputs
+        self.focus_crops = focus_crops
+
+    @staticmethod
+    def zoom_on_foreground(x, y):
+        """Half-size window around a random foreground pixel, resized back: objects appear 2x larger."""
+        points = y.nonzero()
+        if len(points) == 0 or x.shape[-2:] != y.shape[-2:]:
+            return x, y
+        h, w = y.shape
+        ch, cw = h // 2, w // 2
+        cy, cx = points[int(torch.randint(len(points), ()))].tolist()
+        jy, jx = (int(torch.randint(-(n // 4), n // 4 + 1, ())) for n in (ch, cw))
+        top = min(max(cy - ch // 2 + jy, 0), h - ch)
+        left = min(max(cx - cw // 2 + jx, 0), w - cw)
+        x = F.interpolate(x[None, :, top:top + ch, left:left + cw], (h, w), mode="bilinear", align_corners=False)[0]
+        y = F.interpolate(y[None, None, top:top + ch, left:left + cw].float(), (h, w), mode="nearest")[0, 0].long()
+        return x, y
 
     def __len__(self):
         return len(self.raw)
@@ -192,6 +210,8 @@ class GeoDataset(Dataset):
             y = label_tensor(sample, self.kind)
             if self.kind == "segmentation" and not self.native_mask:
                 y = F.interpolate(y[None, None].float(), (self.size, self.size), mode="nearest")[0, 0].long()
+        if self.focus_crops and torch.rand(()) < 0.5:
+            x, y = self.zoom_on_foreground(x, y)
         if self.augment:
             for dim in [-1, -2]:
                 if torch.rand(()) < 0.5:

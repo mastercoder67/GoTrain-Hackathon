@@ -28,6 +28,13 @@ def train_model(task: str, recipe_json: str, hypothesis: str) -> dict:
 
 
 @mcp.tool()
+def diagnose_model(task: str, run_id: str = "") -> dict:
+    """Measure where a completed run fails on validation data and suggest recipe levers."""
+    from .diagnose import diagnose
+    return diagnose(task, run_id or None)
+
+
+@mcp.tool()
 def compare_models(task: str) -> dict:
     """Return development results, with the model chosen by validation only."""
     return {"runs": list_runs(task), "best": best_run(task)}

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from gotrain import data, engine, report
+from gotrain import data, diagnose, diary, engine, report
 from gotrain.artifacts import publish_model, restore_model
 from gotrain.config import Recipe
 from gotrain.metrics import confusion_matrix, scores
@@ -51,7 +51,7 @@ def fake_benchmark(tmp_path, monkeypatch):
         return SimpleNamespace(get_dataset=lambda split: raw(task, split),
                                label_type=SimpleNamespace(class_names=["background", "foreground"]))
 
-    for module in (data, engine, report):
+    for module in (data, engine, report, diagnose):
         monkeypatch.setattr(module, "open_dev_split", dev)
         monkeypatch.setattr(module, "get_task", spec)
     monkeypatch.setattr(engine, "fingerprint", lambda task: {"fixture": "v1"})
@@ -175,6 +175,8 @@ def test_agent_tools_budget_and_logs(fake_benchmark, monkeypatch):
                                  "image_size": 64, "batch_size": 2, "stats_samples": 2})
             result = self.tools["run_experiment"](recipe, "Test tool execution")
             assert result["status"] == "completed"
+            assert result["verdict"] == "kept" and result["previous_best_score"] is None
+            assert self.tools["diagnose_errors"](result["run_id"])["split"] == "valid"
             assert self.tools["run_experiment"](recipe, "Must not train again")["status"] == "budget_exhausted"
             assert self.tools["compare_experiments"]()["attempts_used"] == 1
             self.tools["publish_best_model"]()
@@ -186,7 +188,10 @@ def test_agent_tools_budget_and_logs(fake_benchmark, monkeypatch):
     result = run_agent("m-pv4ger", experiments=1, minutes=2)
     session = read_json(Path(result["path"]) / "session.json")
     assert session["attempts"] == 1
-    assert session["tool_calls"] == 6
+    assert session["tool_calls"] == 7
+    page = Path(result["diary"]).read_text(encoding="utf-8")
+    assert "kept as new best" in page and "Diagnosed run" in page and 'http-equiv="refresh"' not in page
+    assert (Path(result["path"]) / "showcase" / "showcase.json").exists()
     assert "test" not in fake_benchmark
 
 
@@ -273,3 +278,61 @@ def test_inference_variant_uses_validation_only(fake_benchmark, monkeypatch):
     assert variant["recipe"]["tta"] is True
     assert variant["parent_run_id"] == parent["run_id"]
     assert "test" not in fake_benchmark
+
+
+def test_object_components_measure_size_dependent_misses():
+    truth = np.zeros((20, 20), dtype=np.int64)
+    truth[1:3, 1:3] = 1          # small object, missed
+    truth[10:16, 10:16] = 1      # large object, found
+    truth[1:3, 17:19] = 1        # second small object, separate component
+    prediction = np.zeros_like(truth)
+    prediction[10:16, 10:16] = 1
+    records = sorted(diagnose.object_records(truth, prediction))
+    assert records == [(4, 0.0), (4, 0.0), (36, 1.0)]
+    assert diagnose.components(np.zeros((4, 4), dtype=bool)).max() == 0
+
+
+def test_focus_crops_zoom_keeps_image_and_mask_aligned():
+    torch.manual_seed(0)
+    mask = torch.zeros(64, 64, dtype=torch.long)
+    mask[30:34, 30:34] = 1
+    image = mask[None].float().repeat(3, 1, 1)
+    for _ in range(10):
+        x, y = data.GeoDataset.zoom_on_foreground(image, mask)
+        assert y.shape == mask.shape and int(y.sum()) == 64  # 4x4 object shown at 2x scale
+        assert ((x[0] > 0.5).long() == y).float().mean() > 0.97
+    with pytest.raises(ValueError, match="segmentation only"):
+        Recipe(focus_crops=True).validate("classification")
+
+
+def test_diagnose_and_showcase_use_validation_only(fake_benchmark):
+    recipe = Recipe(model="small", pretrained=False, epochs=1, batch_size=2, image_size=64,
+                    stats_samples=4, amp=False, dice=True, focus_crops=True)
+    first = engine.train("m-pv4ger-seg", recipe, "Baseline")
+    result = diagnose.diagnose("m-pv4ger-seg", first["run_id"], examples=2)
+    assert result["split"] == "valid" and result["observations"]
+    assert result["objects"] == 4 and result["object_detection_by_size"]
+    directory = run_dir("m-pv4ger-seg", first["run_id"])
+    assert all((directory / e["image"]).exists() for e in result["worst_examples"])
+    shown = diagnose.showcase("m-pv4ger-seg", first["run_id"], first["run_id"], directory.parent / "showcase")
+    assert shown["examples"] and (directory.parent / "showcase" / shown["examples"][0]["image"]).exists()
+    assert "test" not in fake_benchmark
+
+
+def test_diary_reads_only_logged_evidence(tmp_path, monkeypatch):
+    from gotrain.store import append_event
+    monkeypatch.setenv("GOTRAIN_RUNS", str(tmp_path / "runs"))
+    session = tmp_path / "runs" / "sessions" / "session_x"
+    log = session / "events.jsonl"
+    append_event(log, "session_started", task="m-pv4ger-seg", kind="segmentation", experiments=2, minutes=30)
+    append_event(log, "experiment_requested", attempt=1, hypothesis="Baseline <b>", recipe_json='{"model": "resnet18"}')
+    page = Path(diary.build(session)["diary"]).read_text(encoding="utf-8")
+    assert 'http-equiv="refresh"' in page and "Training experiment 1" in page and "Baseline &lt;b&gt;" in page
+    append_event(log, "tool_result", tool="run_experiment", inputs={}, result={
+        "status": "completed", "selection_metric": "mean_iou", "selection_score": 0.71, "verdict": "rejected",
+        "previous_best_score": 0.75, "best_epoch": 3, "elapsed_seconds": 60, "minutes_remaining": 12})
+    append_event(log, "session_completed", response="done")
+    page = Path(diary.build(session)["diary"]).read_text(encoding="utf-8")
+    assert "0.7100 (previous best 0.7500): rejected" in page and "12 min of budget left" in page
+    assert 'http-equiv="refresh"' not in page
+    assert (tmp_path / "runs" / "live-diary.html").exists()

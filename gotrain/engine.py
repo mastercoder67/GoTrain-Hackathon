@@ -87,7 +87,8 @@ def loaders(task, recipe, stats):
     use_cache = recipe.cache and estimated <= 2 * 1024**3
     train_cache = cached_split(task, "train", raw_train, recipe.image_size, kind, False) if use_cache else None
     valid_cache = cached_split(task, "valid", raw_valid, recipe.image_size, kind, True) if use_cache else None
-    train = GeoDataset(raw_train, kind, recipe.image_size, stats, recipe.augmentation, cache=train_cache)
+    train = GeoDataset(raw_train, kind, recipe.image_size, stats, recipe.augmentation, cache=train_cache,
+                       focus_crops=recipe.focus_crops)
     valid = GeoDataset(raw_valid, kind, recipe.image_size, stats, native_mask=True, cache=valid_cache)
     # A batch of one permits native resolution masks of varying shape at evaluation.
     valid_batch = 1 if kind == "segmentation" else recipe.batch_size

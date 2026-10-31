@@ -14,6 +14,34 @@ for all four tasks or a complete submission bundle. If final tests have already
 been run in SageMaker, recover and verify their original outputs rather than
 running them again. Never present validation metrics as test results.
 
+## The AI-scientist loop
+
+GoTrain does not only tune numbers; it investigates why a model fails and tests a fix:
+
+```text
+inspect → baseline → diagnose errors → one targeted hypothesis → train → kept / rejected → diagnose again …
+```
+
+| Step | Tool | What it produces |
+|---|---|---|
+| Diagnose | `diagnose_errors` | Measured validation failures: object detection rate by object size (small/medium/large terciles), predicted vs true foreground area, false positives on empty images, most-confused class pairs, worst examples as images, and candidate recipe levers |
+| Hypothesize | `run_experiment` | One change that must quote the number it targets, e.g. *"small panels are 31% detected vs 90% for large; test focus_crops"* |
+| Targeted fix | `focus_crops` recipe option | Half of the segmentation training samples are zoomed 2× onto a random foreground object (aligned image/mask) |
+| Verdict | `run_experiment` result | `kept` only if strictly better on validation than the previous best, otherwise `rejected`; plus minutes and attempts left |
+| Show | live diary | `~/gotrain-runs/v1/live-diary.html` refreshes every 10 s with each observation, hypothesis, verdict, epoch progress and the budget |
+| Before → after | showcase | At session end: the first model's worst validation images, shown as input · first model · best model · true mask |
+
+Rejected hypotheses stay in the diary and logs; they are evidence too. All of this
+uses the validation split only.
+
+```bash
+python -m gotrain agent m-pv4ger-seg --experiments 3 --minutes 30
+# In JupyterLab: right-click ~/gotrain-runs/v1/live-diary.html → Open in New Browser Tab
+python -m gotrain diagnose m-pv4ger-seg            # analyse the best run by hand
+python -m gotrain showcase m-pv4ger-seg            # first run vs best run, same images
+python -m gotrain diary                            # rebuild the latest session's diary
+```
+
 ## The four tasks
 
 | Task | Input | Output | Default validation selection |
@@ -109,7 +137,7 @@ Preserving small objects may need larger images; confirm the tradeoff on validat
 One tool call is one experiment with an explicit hypothesis. The recipe can change
 model (`small`, `resnet18`, `resnet34`), pretrained initialization, learning rate,
 weight decay, image size, batch size, augmentation, class-balanced loss, Dice loss,
-epochs and patience. Classification uses a ResNet head; segmentation uses a ResNet
+foreground-focused crops (segmentation), epochs and patience. Classification uses a ResNet head; segmentation uses a ResNet
 encoder with U-Net-style skip connections and a newly initialized decoder.
 
 Use a recipe file for a manual experiment:
@@ -251,6 +279,10 @@ and fixed validation prediction examples. Open/download it from JupyterLab's fil
 browser. It needs no hosted dashboard, public port, or separate JavaScript app.
 Show the agent in the terminal, then the report. No synthetic scores are presented
 as real results. A score improvement should appear in both the report and the logs.
+
+For the live demo, open `live-diary.html` (see *The AI-scientist loop*) beside the
+terminal while the agent runs. Each session also keeps its own `diary.html` and
+`showcase/` images under `sessions/<session_id>/`, which `export` includes.
 
 ## GoPilot / MCP integration
 

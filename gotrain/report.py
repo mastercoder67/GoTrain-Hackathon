@@ -99,6 +99,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1b2738;padding:20px;
     document += '<h2>Validation experiments</h2><svg viewBox="0 0 740 270" role="img" aria-label="Validation score by epoch for each experiment"><path d="M40 20V230H710" stroke="#7b8da8" fill="none"/><text x="8" y="35" fill="#bac8dc">1</text><text x="8" y="235" fill="#bac8dc">0</text><text x="300" y="265" fill="#bac8dc">Epoch (within each run)</text>' + "".join(curves) + '</svg>'
     document += '<table><tr><th>Run</th><th>Best score</th><th>Epoch</th><th>Runtime</th><th>Hypothesis</th></tr>' + "".join(rows) + '</table>'
     document += '<h2>Validation predictions</h2><p>Fixed evenly spaced validation examples. White denotes foreground. Input contrast is stretched for display only.</p>' + "".join(cards)
+    diagnosis_path = directory / "diagnosis.json"
+    if diagnosis_path.exists():
+        observations = read_json(diagnosis_path)["observations"]
+        document += '<h2>Error diagnosis (validation)</h2><ul>' + "".join(
+            f'<li>{html.escape(o)}</li>' for o in observations) + '</ul>'
     document += '<h2>Measured validation metrics</h2><pre>' + html.escape(json.dumps(selected["validation"], indent=2)) + '</pre>'
     document += '<h2>Final test status</h2><pre>' + test_section + '</pre></main></html>'
     path = task_dir(task) / "report.html"

@@ -46,6 +46,15 @@ def main():
         if command == "finalize":
             p.add_argument("--confirm-test-once", action="store_true", required=True,
                            help="Freeze model selection and consume final test evaluation")
+    p = sub.add_parser("diagnose")
+    p.add_argument("task", choices=TASKS)
+    p.add_argument("--run", help="Completed run ID; default is the best validation run")
+    p = sub.add_parser("showcase")
+    p.add_argument("task", choices=TASKS)
+    p.add_argument("--before", help="Run ID; default is the first completed run")
+    p.add_argument("--after", help="Run ID; default is the best validation run")
+    p = sub.add_parser("diary")
+    p.add_argument("session", nargs="?", help="Session ID; default is the latest session")
     for command in ("publish-model", "restore-model"):
         p = sub.add_parser(command)
         p.add_argument("task", choices=TASKS)
@@ -80,6 +89,19 @@ def main():
     elif args.command == "tta":
         from .variants import compare_tta
         emit(compare_tta(args.task))
+    elif args.command == "diagnose":
+        from .diagnose import diagnose
+        emit(diagnose(args.task, args.run))
+    elif args.command == "showcase":
+        from .diagnose import first_and_best, showcase
+        from .store import task_dir
+        first, best = first_and_best(args.task)
+        emit(showcase(args.task, args.before or first, args.after or best, task_dir(args.task) / "showcase"))
+    elif args.command == "diary":
+        from . import diary
+        from .config import runs_root
+        session = runs_root() / "sessions" / args.session if args.session else diary.latest_session()
+        emit(diary.build(session))
     elif args.command == "report":
         from .report import create_report
         emit(create_report(args.task))
