@@ -247,5 +247,29 @@ def test_cache_alignment_and_native_validation_mask(fake_benchmark):
     assert y.shape == (32, 32)
     assert torch.equal(y, original_y)
     assert torch.allclose(x, original_x, atol=0.003)
+    equivalent = data.GeoDataset(raw, "segmentation", 64, stats, native_mask=True, quantize_inputs=True)
+    assert torch.equal(x, equivalent[0][0])
     with pytest.raises(ValueError):
         data.cached_split("m-pv4ger-seg", "test", raw, 64, "segmentation", True)
+
+
+def test_flip_averaging_restores_mask_orientation():
+    class PixelModel(torch.nn.Module):
+        def forward(self, x):
+            return torch.cat([-x[:, :1], x[:, :1]], dim=1)
+    model = PixelModel()
+    x = torch.randn(2, 3, 16, 24)
+    expected = model(x).softmax(1)
+    assert torch.allclose(engine.predict(model, x, "segmentation", True), expected, atol=1e-6)
+
+
+def test_inference_variant_uses_validation_only(fake_benchmark, monkeypatch):
+    from gotrain import variants
+    monkeypatch.setattr(variants, "fingerprint", lambda task: {"fixture": "v1"})
+    monkeypatch.setattr(variants, "open_dev_split", data.open_dev_split)
+    parent = engine.train("m-pv4ger", Recipe(model="small", pretrained=False, epochs=1,
+                          image_size=64, batch_size=2, stats_samples=4))
+    variant = variants.compare_tta("m-pv4ger")
+    assert variant["recipe"]["tta"] is True
+    assert variant["parent_run_id"] == parent["run_id"]
+    assert "test" not in fake_benchmark

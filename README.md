@@ -186,6 +186,14 @@ claiming test access, it remains locked: inspect logs and discuss with the organ
 do not delete markers or create new run roots to evade the once-only rule. These are
 application safeguards, not filesystem isolation against someone manually reading files.
 
+## Validation-only inference comparison
+
+After training and fixed refinement, `python -m gotrain tta TASK` compares four-flip
+probability averaging on validation data and records a new immutable version.
+The selected recipe preserves its inference policy and input precision in final
+evaluation and prediction reports. This uses four forward passes per image.
+A variant is retained only if its measured validation score wins selection.
+
 ## Extra points: artifact storage and versions
 
 Run layout (outside Git):

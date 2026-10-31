@@ -156,13 +156,26 @@ def cached_split(task, split, raw, size, kind, native_mask):
     return result
 
 
+def validation_uses_half_inputs(task, config, channels):
+    if "input_precision" in config:
+        return config["input_precision"] == "float16"
+    # Backward-compatible inference of preprocessing for runs made before the
+    # explicit precision field existed. Legacy uncached recipes omit cache.
+    recipe = config["recipe"]
+    if not recipe.get("cache", False):
+        return False
+    count = len(open_dev_split(task, "train")) + len(open_dev_split(task, "valid"))
+    return count * channels * recipe["image_size"]**2 * 2 <= 2 * 1024**3
+
+
 class GeoDataset(Dataset):
-    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False, cache=None):
+    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False, cache=None, quantize_inputs=False):
         self.raw, self.kind, self.size = raw, kind, size
         self.mean = torch.tensor(stats["mean"])[:, None, None]
         self.std = torch.tensor(stats["std"])[:, None, None]
         self.augment, self.native_mask = augment, native_mask
         self.cache = cache
+        self.quantize_inputs = quantize_inputs
 
     def __len__(self):
         return len(self.raw)
@@ -174,6 +187,8 @@ class GeoDataset(Dataset):
         else:
             sample = self.raw[index]
             x = image_tensor(sample, self.size)
+            if self.quantize_inputs:
+                x = x.half().float()
             y = label_tensor(sample, self.kind)
             if self.kind == "segmentation" and not self.native_mask:
                 y = F.interpolate(y[None, None].float(), (self.size, self.size), mode="nearest")[0, 0].long()

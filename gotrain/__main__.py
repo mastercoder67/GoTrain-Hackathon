@@ -34,7 +34,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor")
     sub.add_parser("smoke")
-    for command in ("prepare", "inspect", "train", "agent", "compare", "report", "finalize", "publish-data", "restore-data"):
+    for command in ("prepare", "inspect", "train", "agent", "compare", "report", "finalize", "publish-data", "restore-data", "tta"):
         p = sub.add_parser(command)
         p.add_argument("task", choices=TASKS)
         if command == "train":
@@ -77,6 +77,9 @@ def main():
     elif args.command == "compare":
         from .store import list_runs
         emit(list_runs(args.task))
+    elif args.command == "tta":
+        from .variants import compare_tta
+        emit(compare_tta(args.task))
     elif args.command == "report":
         from .report import create_report
         emit(create_report(args.task))

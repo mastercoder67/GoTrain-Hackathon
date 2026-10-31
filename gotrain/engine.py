@@ -17,7 +17,8 @@ from torch.utils.data import DataLoader
 
 from .config import Recipe, task_info
 from .config import runs_root
-from .data import GeoDataset, cached_split, fingerprint, get_task, open_dev_split, training_statistics
+from .data import (GeoDataset, cached_split, fingerprint, get_task, open_dev_split,
+                   training_statistics, validation_uses_half_inputs)
 from .metrics import confusion_matrix, scores
 from .models import build_model, loss_value
 from .store import (append_event, assert_unfrozen, best_run, claim_once, new_run,
@@ -51,12 +52,25 @@ def seed_all(seed):
     # Record a seed, but do not claim bitwise GPU reproducibility.
 
 
-def evaluate(model, loader, device, classes, kind):
+def predict(model, images, kind, tta=False):
+    if not tta:
+        return model(images)
+    total = None
+    for dims in ((), (-1,), (-2,), (-2, -1)):
+        augmented = images.flip(dims) if dims else images
+        probabilities = model(augmented).float().softmax(1)
+        if dims and kind == "segmentation":
+            probabilities = probabilities.flip(dims)
+        total = probabilities if total is None else total + probabilities
+    return total / 4
+
+
+def evaluate(model, loader, device, classes, kind, tta=False):
     model.eval()
     cm = np.zeros((classes, classes), dtype=np.int64)
     with torch.inference_mode():
         for images, labels in loader:
-            logits = model(images.to(device))
+            logits = predict(model, images.to(device), kind, tta)
             if kind == "segmentation" and logits.shape[-2:] != labels.shape[-2:]:
                 logits = F.interpolate(logits, labels.shape[-2:], mode="bilinear", align_corners=False)
             predictions = logits.argmax(1).cpu().numpy()
@@ -143,6 +157,8 @@ def _train(task, recipe, hypothesis):
             stats = training_statistics(task, recipe.image_size, recipe.stats_samples, recipe.seed)
         write_json(directory / "normalization.json", stats)
         train_loader, valid_loader = loaders(task, recipe, stats)
+        config["input_precision"] = "float16" if valid_loader.dataset.cache is not None else "float32"
+        write_json(directory / "config.json", config)
         model = build_model(recipe, len(stats["mean"]), info["classes"], info["kind"], warm is None).to(device)
         if warm is not None:
             model.load_state_dict(warm["state_dict"])
@@ -191,7 +207,7 @@ def _train(task, recipe, hypothesis):
             if total_samples == 0:
                 break
             # Finish validation even if the soft training budget expired mid-epoch.
-            metrics = evaluate(model, valid_loader, device, info["classes"], info["kind"])
+            metrics = evaluate(model, valid_loader, device, info["classes"], info["kind"], recipe.tta)
             score = metrics[config["selection_metric"]]
             row = {"epoch": epoch, "complete_epoch": complete,
                    "train_loss": total_loss / total_samples, "validation": metrics,
@@ -269,9 +285,10 @@ def _finalize(task):
     claim_once(directory / "test-started.json", {"started_at": now(), "run_id": selection["run_id"],
                                                 "checkpoint_sha256": selection["checkpoint_sha256"]})
     raw = get_task(task).get_dataset(split="test")
-    dataset = GeoDataset(raw, info["kind"], recipe.image_size, saved["normalization"], native_mask=True)
+    dataset = GeoDataset(raw, info["kind"], recipe.image_size, saved["normalization"], native_mask=True,
+                         quantize_inputs=validation_uses_half_inputs(task, saved["config"], len(saved["normalization"]["mean"])))
     loader = DataLoader(dataset, batch_size=1 if info["kind"] == "segmentation" else recipe.batch_size)
-    metrics = evaluate(model, loader, device, info["classes"], info["kind"])
+    metrics = evaluate(model, loader, device, info["classes"], info["kind"], recipe.tta)
     result = {"task": task, "run_id": selection["run_id"], "evaluated_at": now(), "split": "test",
               "samples": len(raw), "metrics": metrics, "checkpoint_sha256": selection["checkpoint_sha256"],
               "selection_metric": selection["selection_metric"], "selection_score": selection["selection_score"]}

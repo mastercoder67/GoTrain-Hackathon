@@ -10,8 +10,9 @@ from PIL import Image
 from torch.nn import functional as F
 
 from .config import Recipe, task_info
-from .data import GeoDataset, get_task, open_dev_split
+from .data import GeoDataset, get_task, open_dev_split, validation_uses_half_inputs
 from .models import build_model
+from .engine import predict
 from .store import best_run, list_runs, read_json, run_dir, sha256, task_dir
 
 
@@ -43,7 +44,8 @@ def create_report(task, examples=6):
     model.load_state_dict(saved["state_dict"])
     model.eval()
     raw = open_dev_split(task, "valid")
-    dataset = GeoDataset(raw, info["kind"], recipe.image_size, saved["normalization"], native_mask=True)
+    dataset = GeoDataset(raw, info["kind"], recipe.image_size, saved["normalization"], native_mask=True,
+                         quantize_inputs=validation_uses_half_inputs(task, saved["config"], len(saved["normalization"]["mean"])))
     names = getattr(get_task(task).label_type, "class_names", None)
     if names is None:
         names = [str(i) for i in range(info["classes"])]
@@ -53,7 +55,7 @@ def create_report(task, examples=6):
     with torch.inference_mode():
         for index in indices:
             x, target = dataset[int(index)]
-            logits = model(x[None])
+            logits = predict(model, x[None], info["kind"], recipe.tta)
             rgb = rgb_view(x, saved["normalization"], task)
             if info["kind"] == "classification":
                 pred = int(logits.argmax(1).item())

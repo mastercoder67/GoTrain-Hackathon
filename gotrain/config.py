@@ -49,6 +49,7 @@ class Recipe:
     max_minutes: float = 30.0
     warm_start: str | None = None
     cache: bool = True
+    tta: bool = False
 
     def validate(self, kind):
         if self.model not in {"small", "resnet18", "resnet34"}:
