@@ -98,7 +98,8 @@ Read comparison history; prefer measured evidence over speculation. Never invent
 unmeasured cause of failure. First try pretrained resnet18, then change a small number of settings
 based on results. resnet34 is a heavier option. Use train-only normalization supplied by the engine.
 For segmentation start image_size=256, batch_size=8, dice=true; for classification start
-image_size=128, batch_size=32. Start learning_rate=0.0003, epochs=15, augmentation=true.
+image_size=128, batch_size=32. Set workers=2 to overlap dataset reading with GPU computation.
+Start learning_rate=0.0003, epochs=15, augmentation=true.
 For severe imbalance test balanced_loss. Keep the seed fixed for comparable experiments.
 You have at most {experiments} training attempts and {minutes} minutes (soft limit, validation finishes).
 Call tools sequentially. On budget_exhausted, do not call run_experiment again.
