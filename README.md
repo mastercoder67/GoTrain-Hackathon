@@ -1,5 +1,64 @@
 # GoTrain — train, measure, improve
 
+> ## 👋 Rabih: start here (branch `ai-scientist-loop`)
+>
+> This branch adds four things on top of `main`, without changing `main`:
+>
+> 1. **Error diagnosis**: after each experiment the agent measures *where* the model fails
+>    (small vs. large objects, confused classes, worst images) and tests one targeted fix.
+> 2. **`focus_crops`**: a new segmentation option that zooms training images onto the objects.
+> 3. **Memory across tasks**: every experiment becomes a measured lesson that the agent reads
+>    before the next dataset (`lessons.jsonl`).
+> 4. **Chat app + model registry**: a ChatGPT-style page (burgundy/black) to start training in
+>    plain words and watch every step, plus a registry page to publish/restore/verify models.
+>
+> **Step 1: get the code onto SageMaker** (Jupyter terminal):
+>
+> ```bash
+> source ~/gotrain-env/bin/activate
+> cd ~/GoTrain-Hackathon
+> git fetch origin
+> git checkout ai-scientist-loop
+> git pull
+> python -m pip install -e '.[dev]'
+> python -m pytest -q                  # expect: 31 passed
+> ```
+>
+> **Step 2: give the agent its EuroSAT memory** (uses the runs already on SageMaker):
+>
+> ```bash
+> python -m gotrain learn m-eurosat
+> ```
+>
+> **Step 3: open the chat app**:
+>
+> ```bash
+> python -m gotrain ui
+> ```
+>
+> Leave it running. In the browser, take the JupyterLab address and replace its ending
+> with `/proxy/8765/`, e.g. `https://…/jupyterlab/default/proxy/8765/`.
+> Type a request such as *"Train the best solar-panel segmentation model in 30 minutes"*.
+> The sidebar has **💬 Chat** and **🗄️ Model registry**.
+>
+> *If the `/proxy/` link does not open*, train from a second terminal instead and watch the
+> saved chat page: right-click `gotrain-runs/v1/live-diary.html` → **Open in New Browser Tab**
+> (it refreshes every 10 s; it is read-only).
+>
+> ```bash
+> python -m gotrain agent m-pv4ger-seg --experiments 3 --minutes 30
+> ```
+>
+> **Step 4: train the remaining tasks, one at a time** (single GPU). This order lets the
+> memory help: `m-pv4ger` → `m-pv4ger-seg` → `m-nz-cattle`.
+>
+> **Step 5: only at the very end**, freeze and test once per task, then export
+> (see *Final test* below): `python -m gotrain finalize TASK --confirm-test-once`,
+> then `python -m gotrain export --out submission`.
+>
+> When the branch works on SageMaker, merge it into `main` on GitHub (Pull request →
+> `ai-scientist-loop` → `main`).
+
 An autonomous geospatial model training agent for the AUB ACM × RASID hackathon.
 Give it a GEO-Bench task and a compute budget. A single Strands agent on Amazon
 Bedrock inspects the dataset, chooses a recipe, runs training tools, compares
