@@ -19,6 +19,9 @@ def test_demo_uses_saved_evidence_and_escapes_script_content(tmp_path):
         {"command": ["python", "-m", "pytest"], "returncode": 0, "stdout": "24 passed"}]}))
     (task / "test-started.json").write_text('{"do_not_modify": true}')
     (task / "test-result.json").write_text(json.dumps(result))
+    (submission / "lessons.jsonl").write_text(json.dumps({"task": "m-pv4ger-seg", "type": "experiment",
+        "before": 0.8, "after": 0.81, "metric": "mean_iou", "verdict": "kept"}) + "\n")
+    (run / "diagnosis.json").write_text(json.dumps({"split": "valid", "observations": ["Measured validation failure"]}))
     (run / "summary.json").write_text(json.dumps({"run_id": "recorded-run", "status": "completed",
         "selection_metric": "mean_iou", "selection_score": 0.85,
         "hypothesis": "</script><script>alert('untrusted evidence')</script>"}))
@@ -32,6 +35,8 @@ def test_demo_uses_saved_evidence_and_escapes_script_content(tmp_path):
     assert '"samples": 65' in document
     assert '"output": "24 passed"' in document
     assert '"output": "22 passed"' not in document
+    assert '"memory": [{"task": "m-pv4ger-seg"' in document
+    assert "Measured validation failure" in document
     assert "Recorded session replay" in document
     assert {p: p.read_bytes() for p in before} == before
 

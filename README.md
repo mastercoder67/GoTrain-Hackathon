@@ -25,6 +25,24 @@ use their recorded evidence rather than launching training or final evaluation.
 
 ### ✅ Rabih: remaining checklist before the presentation
 
+**Verified on SageMaker (31 October 2026):** the checklist is complete except
+for optional S3 verification, which requires an approved bucket. Memory now
+contains **15 measured comparisons across all four tasks**. All four frozen
+selected models have validation diagnoses and passed model publish/restore
+checksum verification through the registry API. The chat and registry were
+checked in the browser and screenshots were captured. The refreshed dashboard
+includes memory, diagnoses and registry evidence; the updated presentation has
+15 slides. **34 software tests and 37 dashboard browser checks passed.**
+The original final-test records and checkpoint hashes remain unchanged.
+
+Evidence is in `~/gotrain-release-verification/checklist/`; the latest PDF and
+speaker notes are in `~/gotrain-release-verification/presentation/`. Open
+`~/gotrain-demo.html` for the offline evidence viewer, or run `python -m gotrain ui`
+and open `/proxy/8765/` for the chat and registry. Historical logs without an
+explicit kept/rejected verdict display as completed, rather than inventing a verdict.
+The 15 memory records were reconstructed after freezing and did not influence
+the original scores. **S3 remains unverified.**
+
 Everything below is safe after the final tests: no training, no test-split access.
 Run it in the Jupyter terminal after the update commands above.
 

@@ -122,17 +122,20 @@ def entries(rows, task=None):
                 status = result.get("status")
                 if status == "completed":
                     metric = METRIC_NAMES.get(result.get("selection_metric"), "score")
-                    kept = result.get("verdict") == "kept"
+                    verdict = result.get("verdict")
+                    kept = verdict == "kept"
+                    verdict_text = ("kept as new best" if kept else "rejected") if verdict in {"kept", "rejected"} else "completed (verdict not recorded)"
                     previous = result.get("previous_best_score")
                     change = f" (previous best {previous:.4f})" if previous is not None else ""
-                    out.append(message("📈" if kept else "📉",
+                    remaining = (f" · {result['minutes_remaining']:.0f} min of budget left"
+                                 if result.get("minutes_remaining") is not None else "")
+                    out.append(message("📈" if kept else "📉" if verdict == "rejected" else "🧪",
                                        f"Validation {metric} {result['selection_score']:.4f}{change}: "
-                                       f"{'kept as new best' if kept else 'rejected'}",
+                                       + verdict_text,
                                        f"Best epoch {result.get('best_epoch')} · "
-                                       f"{result.get('elapsed_seconds', 0) / 60:.1f} min · "
-                                       f"{result.get('minutes_remaining', 0):.0f} min of budget left"
+                                       f"{result.get('elapsed_seconds', 0) / 60:.1f} min" + remaining
                                        + (f"\nMemory: {result['lesson_recorded']}" if result.get("lesson_recorded") else ""),
-                                       "kept" if kept else "rejected"))
+                                       verdict if verdict in {"kept", "rejected"} else "info"))
                 elif status == "budget_exhausted":
                     out.append(message("⏱️", "Budget used up", "No more training runs in this session.", "plan"))
                 else:

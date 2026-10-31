@@ -36,6 +36,17 @@ def read(path, default=None):
     return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else default
 
 
+def read_json_lines(path):
+    rows = []
+    if path.is_file():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return rows
+
+
 def image_uri(directory, relative):
     path = (directory / relative).resolve()
     if not path.is_relative_to(directory.resolve()) or path.suffix != ".png":
@@ -125,10 +136,13 @@ def build_payload(submission):
                       "best": best and {k: best.get(k) for k in ("selection_score", "selection_metric", "run_id")},
                       "runs": runs, "samples": parser.samples, "showcase": showcase,
                       "steps": session_steps(session[1]) if session else [],
-                      "session_id": session[0].get("session_id") if session else None})
+                      "session_id": session[0].get("session_id") if session else None,
+                      "diagnosis": read(directory / final[task]["run_id"] / "diagnosis.json", {}) if task in final else {}})
     return {"tasks": tasks, "complete": bool(scores.get("complete")), "missing_tasks": scores.get("missing_tasks", []),
             "checks": list(checks.values()), "storage": read(submission / "storage-verification.json", {}),
-            "audit": read(submission / "results-audit.json", {})}
+            "audit": read(submission / "results-audit.json", {}),
+            "memory": read_json_lines(submission / "lessons.jsonl"),
+            "registry": read(submission / "registry-state.json", {})}
 
 
 def build_demo(submission, output):
