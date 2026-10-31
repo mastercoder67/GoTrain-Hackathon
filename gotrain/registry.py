@@ -47,7 +47,7 @@ def versions(task):
         out.append({"run_id": run["run_id"], "status": run.get("status"), "created_at": config.get("created_at"),
                     "score": run.get("selection_score"), "metric": run.get("selection_metric"),
                     "hypothesis": run.get("hypothesis") or config.get("hypothesis"),
-                    "recipe": f"{recipe.get('model')} · {recipe.get('image_size')}px · lr {recipe.get('learning_rate')}"
+                    "recipe": f"{recipe.get('model')} · {recipe.get('image_size')}px · lr {recipe.get('learning_rate'):g}"
                               + (" · focus crops" if recipe.get("focus_crops") else "")
                               + (" · TTA" if recipe.get("tta") else ""),
                     "parent": recipe.get("warm_start") or config.get("parent_run_id"),

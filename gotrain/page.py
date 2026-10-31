@@ -49,13 +49,13 @@ main{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh}
 .bar{height:6px;background:rgba(255,255,255,.07);border-radius:4px;overflow:hidden;margin-top:4px}.bar i{display:block;height:100%;background:var(--grad);border-radius:4px;transition:width .6s}
 #scroll{flex:1;overflow:auto;scroll-behavior:smooth}.thread{max-width:800px;margin:0 auto;padding:30px 24px 48px}
 /* messages */
-.row{display:flex;gap:14px;margin:0 0 24px}.row.new{animation:rise .35s ease both}@keyframes rise{from{opacity:0;transform:translateY(8px)}}
+.row{display:flex;gap:14px;margin:0 0 24px}.row.fresh{animation:rise .35s ease both}@keyframes rise{from{opacity:0;transform:translateY(8px)}}
 .row.user{justify-content:flex-end}
 .user .text{background:linear-gradient(180deg,#2a141c,#200f15);border:1px solid var(--line);border-radius:22px 22px 6px 22px;padding:12px 18px;max-width:80%;white-space:pre-wrap;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 .avatar{width:34px;height:34px;flex:none;border-radius:50%;background:var(--grad);display:grid;place-items:center;font-size:16px;margin-top:1px;box-shadow:0 4px 16px rgba(128,0,32,.4),inset 0 1px 0 rgba(255,255,255,.2)}
 .body{flex:1;min-width:0}.body>b{display:block;font-weight:600;letter-spacing:-.005em}
 .body p{margin:5px 0 0;color:var(--soft);white-space:pre-wrap;overflow-wrap:anywhere}.body ul{margin:7px 0 0;padding-left:20px;color:var(--soft)}.body li{margin:3px 0}
-.tone-kept .avatar{box-shadow:0 0 0 2px #060405,0 0 0 4px var(--wine-hi),0 4px 18px rgba(176,40,79,.6)}
+.tone-kept .avatar,.tone-ok .avatar{box-shadow:0 0 0 2px #060405,0 0 0 4px var(--wine-hi),0 4px 18px rgba(176,40,79,.6)}
 .tone-rejected .avatar{background:#2a2023;box-shadow:none;filter:grayscale(.4)}
 .tone-goal>.body>b{background:linear-gradient(90deg,#fff,var(--rose));-webkit-background-clip:text;background-clip:text;color:transparent}
 .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.09em;border-radius:6px;padding:2px 8px;margin-left:9px;vertical-align:2px}
@@ -65,9 +65,12 @@ figure img{width:100%;border-radius:9px;image-rendering:pixelated;display:block}
 .live .avatar{animation:glow 1.6s infinite}@keyframes glow{50%{box-shadow:0 0 0 8px rgba(176,40,79,.18),0 4px 22px rgba(176,40,79,.6)}}
 .shimmer{background:linear-gradient(90deg,var(--soft) 0%,#fff 45%,var(--soft) 90%);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:sh 2s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
+.md p{margin:6px 0 0;white-space:normal}.md p.bullet{padding-left:16px;position:relative}.md p.bullet::before{content:"";position:absolute;left:3px;top:.7em;width:5px;height:5px;border-radius:50%;background:var(--wine-hi)}
+.md strong{color:var(--ink);font-weight:600}.md code{font-family:var(--mono);font-size:12.5px;background:rgba(255,255,255,.06);border-radius:5px;padding:1px 5px}
+.md table{display:block;overflow-x:auto;margin:10px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px 10px}.md td,.md th{white-space:normal;font-size:12.5px}.md td:first-child{white-space:nowrap}
 .card{background:var(--glass);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-top:12px;backdrop-filter:blur(10px)}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{color:var(--muted);font-weight:500;font-size:12px}
-tr:last-child td{border-bottom:0}.pos{color:var(--rose)}
+tr:last-child td{border-bottom:0}td:nth-child(2),td:nth-child(3),th:nth-child(2),th:nth-child(3){white-space:nowrap;overflow-wrap:normal}.pos{color:var(--rose)}
 /* welcome */
 .empty{text-align:center;padding:9vh 0 0}.empty .orb{width:68px;height:68px;font-size:32px;border-radius:22px;margin:auto;animation:float 4s ease-in-out infinite}
 @keyframes float{50%{transform:translateY(-6px)}}
@@ -145,9 +148,37 @@ function agentRow(m) {
   if (m.tone === "kept" || m.tone === "rejected") title.append(el("span", "badge " + m.tone, m.tone === "kept" ? "KEPT" : "REJECTED"));
   body.append(title);
   if (Array.isArray(m.detail)) { const ul = el("ul"); m.detail.forEach(d => ul.append(el("li", null, d))); body.append(ul); }
-  else if (m.detail) body.append(el("p", null, m.detail));
+  else if (m.detail) body.append(/\*\*|^\s*\|/m.test(m.detail) ? richText(m.detail) : el("p", null, m.detail));
   (m.images || []).forEach(i => { const f = el("figure"), img = el("img"); img.src = i.src; img.alt = i.caption; img.loading = "lazy"; f.append(img, el("figcaption", null, i.caption)); body.append(f); });
   row.append(body); return row;
+}
+/* The agent's own summary is markdown: render bold, code, bullets and tables as DOM nodes, never HTML. */
+function inline(node, text) {
+  text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).forEach(part => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) node.append(el("strong", null, part.slice(2, -2)));
+    else if (/^`[^`]+`$/.test(part)) node.append(el("code", null, part.slice(1, -1)));
+    else if (part) node.append(document.createTextNode(part));
+  });
+}
+function richText(text) {
+  const box = el("div", "md"), lines = text.split("\n"), isRow = l => /^\s*\|.*\|\s*$/.test(l);
+  for (let i = 0; i < lines.length;) {
+    if (isRow(lines[i])) {
+      const table = el("table"); let head = true;
+      for (; i < lines.length && isRow(lines[i]); i++) {
+        const cells = lines[i].trim().slice(1, -1).split("|").map(c => c.trim());
+        if (cells.every(c => /^:?-{2,}:?$/.test(c))) continue;
+        const tr = el("tr"); cells.forEach(c => { const cell = el(head ? "th" : "td"); inline(cell, c); tr.append(cell); });
+        table.append(tr); head = false;
+      }
+      box.append(table); continue;
+    }
+    const line = lines[i++];
+    if (!line.trim()) continue;
+    const bullet = /^\s*[-*] /.test(line), para = el("p", bullet ? "bullet" : null);
+    inline(para, line.replace(/^\s*[-*] /, "")); box.append(para);
+  }
+  return box;
 }
 function userRow(text) { const row = el("div", "row user"); row.append(el("div", "text", text)); return row; }
 function delta(v) { return v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(4); }
@@ -181,7 +212,7 @@ function render(data) {
   if (data.sessions) { lastSessions = data.sessions; renderSessions(); }
   if (view !== "chat") return;
   const s = data.state;
-  if (!s) { if (chat.length) { setTitle("New request"); $("meters").replaceChildren(); $("thread").replaceChildren(...chat.map((c, i) => { const r = c.role === "user" ? userRow(c.text) : agentRow(c); if (i === chat.length - 1) r.classList.add("new"); return r; })); } else renderEmpty(); return; }
+  if (!s) { if (chat.length) { setTitle("New request"); $("meters").replaceChildren(); $("thread").replaceChildren(...chat.map((c, i) => { const r = c.role === "user" ? userRow(c.text) : agentRow(c); if (i === chat.length - 1) r.classList.add("fresh"); return r; })); } else renderEmpty(); return; }
   setTitle(s.task, s.done ? "Finished" : "Live");
   $("meters").replaceChildren(meter("Minutes", s.used_minutes, s.minutes), meter("Experiments", s.attempts, s.experiments));
   const scroll = $("scroll"), atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 120;
@@ -189,7 +220,7 @@ function render(data) {
   if (s.live) { const r = agentRow({icon: "🛰️", title: s.live.title, detail: s.live.detail, tone: "info"}); r.classList.add("live"); r.querySelector("b").classList.add("shimmer"); rows.push(r); }
   const mem = memoryCard(s.memory); if (mem && s.done) rows.push(mem);
   const key = s.session_id, before = shown.key === key ? shown.count : 0;
-  rows.forEach((r, i) => { if (i >= before) r.classList.add("new"); });
+  rows.forEach((r, i) => { if (i >= before) r.classList.add("fresh"); });
   shown = {key, count: rows.length - (s.live ? 1 : 0)};
   $("thread").replaceChildren(...rows);
   if (atBottom) scroll.scrollTop = scroll.scrollHeight;

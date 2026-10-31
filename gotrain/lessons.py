@@ -35,6 +35,11 @@ def recipe_change(before, after):
     return {k: [before.get(k), after.get(k)] for k in keys if before.get(k) != after.get(k)}
 
 
+def number(value):
+    """Readable recipe values: 9.999999999999999e-05 -> 0.0001."""
+    return f"{value:g}" if isinstance(value, float) else value
+
+
 def change_label(change):
     parts = []
     for key, (old, new) in change.items():
@@ -43,7 +48,7 @@ def change_label(change):
         elif isinstance(new, bool) or isinstance(old, bool):
             parts.append(f"{key} {'on' if new else 'off'}")
         else:
-            parts.append(f"{key} {old}→{new}")
+            parts.append(f"{key} {number(old)}→{number(new)}")
     return " + ".join(parts) or "same recipe"
 
 

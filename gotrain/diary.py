@@ -58,7 +58,7 @@ def recipe_text(recipe_json):
     except (TypeError, json.JSONDecodeError):
         return ""
     keys = ["model", "image_size", "epochs", "learning_rate", "balanced_loss", "dice", "focus_crops", "warm_start"]
-    return " · ".join(f"{k}={recipe[k]}" for k in keys if k in recipe and recipe[k] not in (None, False))
+    return " · ".join(f"{k}={recipe[k]:g}" if isinstance(recipe[k], float) else f"{k}={recipe[k]}" for k in keys if k in recipe and recipe[k] not in (None, False))
 
 
 def message(icon, title, detail="", tone="info", images=None):
@@ -113,7 +113,7 @@ def entries(rows, task=None):
                     out.append(message("📚", "Memory is empty", "This is the first task GoTrain learns from."))
             elif tool == "record_lesson" and result.get("type") == "insight":
                 out.append(message("💡", "Lesson learned for future tasks",
-                                   f"{result['text']} (evidence: {', '.join(result['evidence'])})", "kept"))
+                                   f"{result['text']} (evidence: {', '.join(result['evidence'])})", "ok"))
             elif tool == "diagnose_errors" and "observations" in result:
                 out.append(message("🔬", f"Diagnosed run {result['run_id']}", result["observations"], "info",
                                    diagnosis_images(task or result["task"], result)))
@@ -143,7 +143,7 @@ def entries(rows, task=None):
             elif tool == "publish_best_model":
                 out.append(message("📦", "Published the best model", result.get("path", ""), "plan"))
             elif tool == "verify_model_download":
-                out.append(message("✅", "Re-downloaded it and verified every checksum", result.get("path", ""), "kept"))
+                out.append(message("✅", "Re-downloaded it and verified every checksum", result.get("path", ""), "ok"))
         elif kind == "session_completed":
             out.append(message("🏁", "Final summary", row.get("response", ""), "goal"))
         elif kind == "session_failed":
