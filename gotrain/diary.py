@@ -83,6 +83,18 @@ def entries(rows):
                 out.append(("🔍", "Inspected the dataset",
                             f"{result.get('train_samples')} training and {result.get('valid_samples')} validation "
                             f"samples, {result.get('bands')} bands.{share}", "look"))
+            elif tool == "recall_lessons":
+                recalled = result.get("lessons_from_other_tasks", []) + result.get("lessons_from_this_task", [])
+                recipes = [f"Winning recipe on {r['task']}: {r['metric']} {r['score']:.4f}"
+                           for r in result.get("best_recipes_from_similar_tasks", [])]
+                if recalled or recipes:
+                    out.append(("📚", f"Recalled {len(recalled)} lessons from memory", (recipes + recalled)[:5], "look"))
+                else:
+                    out.append(("📚", "Memory is empty", "This is the first task GoTrain learns from.", "look"))
+            elif tool == "record_lesson":
+                if result.get("type") == "insight":
+                    out.append(("💡", "Lesson learned for future tasks",
+                                f"{result['text']} (evidence: {', '.join(result['evidence'])})", "kept"))
             elif tool == "diagnose_errors" and "observations" in result:
                 out.append(("🔬", f"Diagnosed run {result['run_id']}", result["observations"], "look"))
             elif tool == "run_experiment":
@@ -97,7 +109,8 @@ def entries(rows):
                                 f"Validation {metric} {result['selection_score']:.4f}{change}: "
                                 f"{'kept as new best' if kept else 'rejected'}",
                                 f"Best epoch {result.get('best_epoch')} · {result.get('elapsed_seconds', 0) / 60:.1f} min · "
-                                f"{result.get('minutes_remaining', 0):.0f} min of budget left",
+                                f"{result.get('minutes_remaining', 0):.0f} min of budget left"
+                                + (f"\nMemory: {result['lesson_recorded']}" if result.get("lesson_recorded") else ""),
                                 "kept" if kept else "rejected"))
                 elif status == "budget_exhausted":
                     out.append(("⏱️", "Budget used up", "No more training runs in this session.", "plan"))
@@ -167,6 +180,23 @@ def latest_diagnosis_html(task, rows):
     return ""
 
 
+def memory_html():
+    from .lessons import load, scoreboard
+    rows = load()
+    board = scoreboard(rows)
+    if not board:
+        return ""
+    lines = []
+    for b in board[:8]:
+        mean = "—" if b["mean_delta"] is None else f"{b['mean_delta']:+.4f}"
+        lines.append(f"<tr><td>{html.escape(b['change'])}</td><td>{b['kept']}/{b['tried']}</td><td>{mean}</td>"
+                     f"<td>{html.escape(', '.join(b['tasks']))}</td></tr>")
+    tasks = len({r["task"] for r in rows})
+    return (f"<h2>What GoTrain has learned</h2><p class='muted'>{len(rows)} lessons from {tasks} "
+            f"task{'s' if tasks != 1 else ''}. Kept = beat the best validation score at the time.</p>"
+            "<table><tr><th>Change</th><th>Kept</th><th>Mean Δ</th><th>Tasks</th></tr>" + "".join(lines) + "</table>")
+
+
 STYLE = """
 :root{--bg:#f6f7f4;--card:#fff;--ink:#17201c;--muted:#5d6b64;--line:#dfe4df;--accent:#0b7a5c;--bad:#b4473a;--plan:#3b5bab}
 @media (prefers-color-scheme:dark){:root{--bg:#101614;--card:#18211d;--ink:#e8efe9;--muted:#9aaba2;--line:#2a3631;--accent:#4cc79c;--bad:#ec8a7c;--plan:#94adf0}}
@@ -182,6 +212,8 @@ li.kept{border-left-color:var(--accent)}li.rejected{border-left-color:var(--bad)
 li p{margin:2px 0 0;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
 figure{margin:0 0 16px}img{max-width:100%;border-radius:8px;border:1px solid var(--line);image-rendering:pixelated}
 .big{font-size:22px}.big b{color:var(--accent)}
+table{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);overflow-wrap:anywhere}th{color:var(--muted);font-weight:600}
 @media (max-width:820px){main{grid-template-columns:1fr}}
 """
 
@@ -223,7 +255,7 @@ def build(session_dir):
 <div class="bar"><i style="width:{min(100, 100 * attempts / experiments):.0f}%"></i></div></div></div></header>
 <section><h2>Diary</h2><ol>{''.join(html_items)}</ol>
 <p class="muted">Validation split only. The test split is never opened during a session.</p></section>
-<section>{visuals}</section></main></body></html>"""
+<section>{visuals}{memory_html()}</section></main></body></html>"""
     path = session_dir / "diary.html"
     temporary = path.with_suffix(".tmp")
     temporary.write_text(document, encoding="utf-8")

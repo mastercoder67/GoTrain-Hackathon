@@ -34,6 +34,35 @@ inspect → baseline → diagnose errors → one targeted hypothesis → train �
 Rejected hypotheses stay in the diary and logs; they are evidence too. All of this
 uses the validation split only.
 
+### GoTrain remembers: lessons across tasks
+
+Every experiment adds a lesson to `~/gotrain-runs/v1/lessons.jsonl`: the recipe
+change compared with the best run it had to beat, and the measured validation
+change (`kept`, `rejected` or `failed`). These are derived from run records, not
+written by the model. At the end of a session the agent adds 1–3 insights with
+`record_lesson`; each must cite run IDs from that task or it is refused.
+
+On the next task the agent calls `recall_lessons` first. It receives the lessons
+(same problem type first), a scoreboard of which changes helped how often, and
+the winning recipe of each similar task as a first experiment to try. Lessons from
+another dataset are hypotheses to re-test, never results for the new one.
+
+Real example from this repository's EuroSAT runs:
+
+```text
+m-eurosat: epochs 15→25 + patience 6→8 · accuracy 0.9680 → 0.9710 (+0.0030) · kept
+m-eurosat: epochs 25→15 + model resnet18→resnet34 + patience 8→6 · accuracy 0.9710 → 0.9590 (-0.0120) · rejected
+```
+
+```bash
+python -m gotrain learn m-eurosat      # turn existing runs into lessons (safe to repeat)
+python -m gotrain lessons m-pv4ger     # what the agent will recall on its next task
+```
+
+Run the tasks in an order that lets memory help: EuroSAT → PV4GER, then
+PV4GER-seg → NZ cattle. The diary shows recalled lessons (📚), new insights (💡)
+and the "What GoTrain has learned" scoreboard. `export` includes `lessons.jsonl`.
+
 ```bash
 python -m gotrain agent m-pv4ger-seg --experiments 3 --minutes 30
 # In JupyterLab: right-click ~/gotrain-runs/v1/live-diary.html → Open in New Browser Tab

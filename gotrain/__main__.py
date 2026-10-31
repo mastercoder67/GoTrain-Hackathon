@@ -8,7 +8,7 @@ from .config import Recipe, TASKS, task_info
 
 
 def emit(result):
-    print(json.dumps(result, indent=2, default=str))
+    print(json.dumps(result, indent=2, default=str, ensure_ascii=False))
 
 
 def smoke():
@@ -53,6 +53,10 @@ def main():
     p.add_argument("task", choices=TASKS)
     p.add_argument("--before", help="Run ID; default is the first completed run")
     p.add_argument("--after", help="Run ID; default is the best validation run")
+    p = sub.add_parser("learn", help="Turn a task's existing runs into lessons for future tasks")
+    p.add_argument("task", choices=TASKS)
+    p = sub.add_parser("lessons", help="Show GoTrain's memory as another task would recall it")
+    p.add_argument("task", choices=TASKS)
     p = sub.add_parser("diary")
     p.add_argument("session", nargs="?", help="Session ID; default is the latest session")
     for command in ("publish-model", "restore-model"):
@@ -97,6 +101,12 @@ def main():
         from .store import task_dir
         first, best = first_and_best(args.task)
         emit(showcase(args.task, args.before or first, args.after or best, task_dir(args.task) / "showcase"))
+    elif args.command == "learn":
+        from .lessons import learn_from_history
+        emit(learn_from_history(args.task))
+    elif args.command == "lessons":
+        from .lessons import recall
+        emit(recall(args.task))
     elif args.command == "diary":
         from . import diary
         from .config import runs_root

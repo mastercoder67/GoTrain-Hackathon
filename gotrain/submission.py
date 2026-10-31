@@ -18,6 +18,8 @@ def export(destination):
         if source.exists():
             shutil.copytree(source, destination / task, dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns("*.pt", "*.tmp", "compute.lock"))
+    if (runs_root() / "lessons.jsonl").exists():
+        shutil.copy2(runs_root() / "lessons.jsonl", destination / "lessons.jsonl")
     sessions = runs_root() / "sessions"
     if sessions.exists():
         shutil.copytree(sessions, destination / "agent-sessions", dirs_exist_ok=True)

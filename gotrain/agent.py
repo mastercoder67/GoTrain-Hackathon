@@ -12,7 +12,7 @@ from .store import append_event, best_run, list_runs, now, write_json
 def run_agent(task, experiments=3, minutes=60):
     from strands import Agent, tool
     from strands.models import BedrockModel
-    from . import artifacts, data, diagnose, diary, engine
+    from . import artifacts, data, diagnose, diary, engine, lessons
 
     if not 1 <= experiments <= 12 or not 1 <= minutes <= 480:
         raise ValueError("Use 1–12 experiments and 1–480 minutes")
@@ -64,13 +64,15 @@ def run_agent(task, experiments=3, minutes=60):
         if attempts >= experiments or remaining <= 0:
             return record("run_experiment", {}, {"status": "budget_exhausted", "message": "Stop training; summarize results."})
         inputs = {"recipe_json": recipe_json, "hypothesis": hypothesis}
+        champion, existing = None, {r["run_id"] for r in list_runs(task)}
         try:
             recipe = Recipe(**json.loads(recipe_json))
             recipe.max_minutes = min(recipe.max_minutes, remaining / 60)
             recipe.validate(info["kind"])
             attempts += 1  # Failures also consume an experiment slot.
             completed = [r for r in list_runs(task) if r.get("status") == "completed"]
-            previous = best_run(task)["selection_score"] if completed else None
+            champion = best_run(task) if completed else None
+            previous = champion["selection_score"] if champion else None
             append_event(log, "experiment_requested", attempt=attempts, **inputs)
             refresh_diary()
             result = engine.train(task, recipe, hypothesis)
@@ -80,8 +82,15 @@ def run_agent(task, experiments=3, minutes=60):
                       "verdict": "kept" if previous is None or result["selection_score"] > previous else "rejected",
                       "attempts_remaining": experiments - attempts,
                       "minutes_remaining": max(0.0, minutes - (time.monotonic() - started) / 60)}
+            if champion:
+                lesson = lessons.add(lessons.experiment_lesson(task, result, champion, session_id))
+                result["lesson_recorded"] = lessons.describe(lesson) if lesson else None
             return record("run_experiment", inputs, result)
         except Exception as error:
+            # Only the run this attempt created; recipe errors before training create no run.
+            failed = [r for r in list_runs(task) if r["run_id"] not in existing and r.get("status") == "failed"]
+            if champion and failed and "recipe" in failed[-1]:
+                lessons.add(lessons.experiment_lesson(task, failed[-1], champion, session_id))
             return record("run_experiment", inputs, {"status": "failed", "error": str(error),
                           "hint": "For CUDA OOM reduce batch_size/image_size; failed runs do not change the best model."})
 
@@ -98,6 +107,26 @@ def run_agent(task, experiments=3, minutes=60):
         except Exception as error:
             return record("diagnose_errors", {"run_id": run_id}, {"status": "failed", "error": str(error)})
         return record("diagnose_errors", {"run_id": run_id}, result)
+
+    @tool
+    def recall_lessons() -> dict:
+        """Read GoTrain's memory: measured lessons from earlier experiments on other tasks and this one,
+        a scoreboard of which changes helped, and the winning recipes of similar tasks."""
+        return record("recall_lessons", {}, lessons.recall(task))
+
+    @tool
+    def record_lesson(insight: str, evidence_run_ids: list[str]) -> dict:
+        """Save one transferable conclusion for future tasks. It must be supported by this task's runs.
+
+        Args:
+            insight: one or two sentences, e.g. "On sparse small targets, focus_crops raised mean IoU by 0.03".
+            evidence_run_ids: run IDs from this task whose measured results support the insight.
+        """
+        inputs = {"insight": insight, "evidence_run_ids": evidence_run_ids}
+        try:
+            return record("record_lesson", inputs, lessons.record_insight(task, insight, evidence_run_ids, session_id))
+        except ValueError as error:
+            return record("record_lesson", inputs, {"status": "rejected", "error": str(error)})
 
     @tool
     def compare_experiments() -> dict:
@@ -129,8 +158,11 @@ def run_agent(task, experiments=3, minutes=60):
     system = f"""You are GoTrain, an autonomous GEO-Bench ML scientist.
 Work ONLY on {task}, a {info['kind']} task. Inspect the data before training.
 Your objective is to improve validation {'accuracy' if info['kind'] == 'classification' else 'mean_iou'}.
-Work as an error-driven scientist:
-1. inspect_dataset, then train a baseline.
+Work as an error-driven scientist with a memory:
+0. After inspect_dataset, call recall_lessons. A winning recipe from a similar task is a good first
+   experiment; say which lesson you use in the hypothesis. Lessons from other datasets are hints, not
+   proof: re-test them here and never cite another task's score as this task's result.
+1. Train a baseline (or the recalled recipe).
 2. diagnose_errors on the latest completed run before every new experiment.
 3. Pick ONE measured observation from the diagnosis and test ONE change aimed at it. The hypothesis
    must quote the number it targets, e.g. "Small objects are 31% detected vs 90% for large; test focus_crops".
@@ -151,6 +183,7 @@ You have at most {experiments} training attempts and {minutes} minutes (soft lim
 Call tools sequentially. On budget_exhausted, do not call run_experiment again.
 After training, compare experiments, publish the best model, and verify its download.
 Dataset publishing is optional because archive copies can take time. Do not finalize or request test data.
+Before finishing, call record_lesson 1-3 times with transferable conclusions, each citing run IDs.
 Finish with observed scores, each hypothesis and its verdict, limitations, and the selected run ID. Tools provide evidence;
 the training history is authoritative. Do not claim the 75% historical baseline is beaten unless measured.
 """
@@ -161,7 +194,8 @@ the training history is authoritative. Do not claim the 75% historical baseline 
         region_name=os.environ.get("AWS_REGION", "eu-central-1"),
     )
     agent = Agent(model=model, system_prompt=system,
-                  tools=[inspect_dataset, run_experiment, diagnose_errors, compare_experiments,
+                  tools=[inspect_dataset, recall_lessons, run_experiment, diagnose_errors, record_lesson,
+                         compare_experiments,
                          publish_best_model, publish_dataset, verify_model_download])
     refresh_diary()
     stop = threading.Event()

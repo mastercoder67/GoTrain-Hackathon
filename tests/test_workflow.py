@@ -171,12 +171,16 @@ def test_agent_tools_budget_and_logs(fake_benchmark, monkeypatch):
             import json
             assert "test" not in self.tools
             self.tools["inspect_dataset"]()
+            assert self.tools["recall_lessons"]()["lessons_from_other_tasks"] == []
             recipe = json.dumps({"model": "small", "pretrained": False, "epochs": 1,
                                  "image_size": 64, "batch_size": 2, "stats_samples": 2})
             result = self.tools["run_experiment"](recipe, "Test tool execution")
             assert result["status"] == "completed"
             assert result["verdict"] == "kept" and result["previous_best_score"] is None
             assert self.tools["diagnose_errors"](result["run_id"])["split"] == "valid"
+            assert self.tools["record_lesson"]("Uncited claims are refused", ["no_such_run"])["status"] == "rejected"
+            assert self.tools["record_lesson"]("A tiny synthetic baseline trains end to end",
+                                               [result["run_id"]])["type"] == "insight"
             assert self.tools["run_experiment"](recipe, "Must not train again")["status"] == "budget_exhausted"
             assert self.tools["compare_experiments"]()["attempts_used"] == 1
             self.tools["publish_best_model"]()
@@ -188,9 +192,10 @@ def test_agent_tools_budget_and_logs(fake_benchmark, monkeypatch):
     result = run_agent("m-pv4ger", experiments=1, minutes=2)
     session = read_json(Path(result["path"]) / "session.json")
     assert session["attempts"] == 1
-    assert session["tool_calls"] == 7
+    assert session["tool_calls"] == 10
     page = Path(result["diary"]).read_text(encoding="utf-8")
     assert "kept as new best" in page and "Diagnosed run" in page and 'http-equiv="refresh"' not in page
+    assert "Memory is empty" in page and "Lesson learned for future tasks" in page
     assert (Path(result["path"]) / "showcase" / "showcase.json").exists()
     assert "test" not in fake_benchmark
 
@@ -336,3 +341,28 @@ def test_diary_reads_only_logged_evidence(tmp_path, monkeypatch):
     assert "0.7100 (previous best 0.7500): rejected" in page and "12 min of budget left" in page
     assert 'http-equiv="refresh"' not in page
     assert (tmp_path / "runs" / "live-diary.html").exists()
+
+
+def test_lessons_transfer_measured_changes_between_tasks(fake_benchmark):
+    from gotrain import lessons
+    base = dict(model="small", pretrained=False, epochs=1, image_size=64, batch_size=2, stats_samples=2, amp=False)
+    first = engine.train("m-pv4ger", Recipe(**base), "Baseline")
+    second = engine.train("m-pv4ger", Recipe(**base, learning_rate=0.001, workers=1), "Higher learning rate")
+    learned = lessons.learn_from_history("m-pv4ger")
+    assert learned["lessons_added"] == 1
+    assert lessons.learn_from_history("m-pv4ger")["lessons_added"] == 0  # idempotent
+    lesson = lessons.load()[0]
+    assert lesson["change"] == {"learning_rate": [0.0003, 0.001]}  # speed-only settings ignored
+    assert lesson["compared_to"] == first["run_id"] and lesson["run_id"] == second["run_id"]
+    assert lesson["delta"] == pytest.approx(second["selection_score"] - first["selection_score"])
+    memory = lessons.recall("m-eurosat")
+    assert memory["lessons_from_other_tasks"] and not memory["lessons_from_this_task"]
+    assert memory["lever_scoreboard"][0]["change"] == "learning_rate 0.0003→0.001"
+    recipe = memory["best_recipes_from_similar_tasks"][0]
+    assert recipe["task"] == "m-pv4ger" and "warm_start" not in recipe["recipe"]
+    assert lessons.recall("m-pv4ger-seg")["best_recipes_from_similar_tasks"] == []  # different kind
+    with pytest.raises(ValueError, match="Evidence"):
+        lessons.record_insight("m-pv4ger", "A claim citing another task's run", ["unknown"])
+    lessons.record_insight("m-pv4ger", "Learning rate changes move this score", [first["run_id"], second["run_id"]])
+    assert "Learning rate changes" in lessons.recall("m-eurosat")["lessons_from_other_tasks"][0]
+    assert "test" not in fake_benchmark
