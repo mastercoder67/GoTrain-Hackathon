@@ -1,0 +1,12 @@
+{
+  "model": "resnet18",
+  "pretrained": true,
+  "epochs": 25,
+  "batch_size": 32,
+  "image_size": 128,
+  "learning_rate": 0.0003,
+  "weight_decay": 0.0001,
+  "augmentation": true,
+  "patience": 8,
+  "max_minutes": 30
+}
