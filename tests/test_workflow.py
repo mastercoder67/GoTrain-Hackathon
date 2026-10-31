@@ -55,6 +55,8 @@ def fake_benchmark(tmp_path, monkeypatch):
         monkeypatch.setattr(module, "open_dev_split", dev)
         monkeypatch.setattr(module, "get_task", spec)
     monkeypatch.setattr(engine, "fingerprint", lambda task: {"fixture": "v1"})
+    monkeypatch.setattr(data, "fingerprint", lambda task: {"fixture": "v1"})
+    monkeypatch.setenv("GOTRAIN_DATA", str(tmp_path / "data"))
     return accesses
 
 
@@ -232,3 +234,18 @@ def test_warm_start_preserves_preprocessing_and_lineage(fake_benchmark):
         engine.train("m-pv4ger", Recipe(model="resnet18", pretrained=False, epochs=1,
                      image_size=64, warm_start=first["run_id"]))
     assert "test" not in fake_benchmark
+
+
+def test_cache_alignment_and_native_validation_mask(fake_benchmark):
+    stats = data.training_statistics("m-pv4ger-seg", 64, 4, 42)
+    raw = data.open_dev_split("m-pv4ger-seg", "valid")
+    cache = data.cached_split("m-pv4ger-seg", "valid", raw, 64, "segmentation", True)
+    dataset = data.GeoDataset(raw, "segmentation", 64, stats, native_mask=True, cache=cache)
+    plain = data.GeoDataset(raw, "segmentation", 64, stats, native_mask=True)
+    x, y = dataset[0]
+    original_x, original_y = plain[0]
+    assert y.shape == (32, 32)
+    assert torch.equal(y, original_y)
+    assert torch.allclose(x, original_x, atol=0.003)
+    with pytest.raises(ValueError):
+        data.cached_split("m-pv4ger-seg", "test", raw, 64, "segmentation", True)

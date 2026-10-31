@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 
 from .config import Recipe, task_info
 from .config import runs_root
-from .data import GeoDataset, fingerprint, get_task, open_dev_split, training_statistics
+from .data import GeoDataset, cached_split, fingerprint, get_task, open_dev_split, training_statistics
 from .metrics import confusion_matrix, scores
 from .models import build_model, loss_value
 from .store import (append_event, assert_unfrozen, best_run, claim_once, new_run,
@@ -66,8 +66,15 @@ def evaluate(model, loader, device, classes, kind):
 
 def loaders(task, recipe, stats):
     kind = task_info(task)["kind"]
-    train = GeoDataset(open_dev_split(task, "train"), kind, recipe.image_size, stats, recipe.augmentation)
-    valid = GeoDataset(open_dev_split(task, "valid"), kind, recipe.image_size, stats, native_mask=True)
+    raw_train, raw_valid = open_dev_split(task, "train"), open_dev_split(task, "valid")
+    # Limit cache construction to roughly 2 GiB of resized image data; mmap keeps
+    # completed caches demand-paged. Larger recipes keep the streaming data path.
+    estimated = (len(raw_train) + len(raw_valid)) * len(stats["mean"]) * recipe.image_size**2 * 2
+    use_cache = recipe.cache and estimated <= 2 * 1024**3
+    train_cache = cached_split(task, "train", raw_train, recipe.image_size, kind, False) if use_cache else None
+    valid_cache = cached_split(task, "valid", raw_valid, recipe.image_size, kind, True) if use_cache else None
+    train = GeoDataset(raw_train, kind, recipe.image_size, stats, recipe.augmentation, cache=train_cache)
+    valid = GeoDataset(raw_valid, kind, recipe.image_size, stats, native_mask=True, cache=valid_cache)
     # A batch of one permits native resolution masks of varying shape at evaluation.
     valid_batch = 1 if kind == "segmentation" else recipe.batch_size
     kwargs = {"num_workers": recipe.workers, "pin_memory": torch.cuda.is_available()}

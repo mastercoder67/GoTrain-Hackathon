@@ -1,5 +1,7 @@
 """GEO-Bench adapters. Development APIs accept train/valid only."""
 import json
+import hashlib
+import os
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -117,22 +119,64 @@ def training_statistics(task, size, count, seed):
             "indices": [int(i) for i in indices], "split": "train"}
 
 
+def cached_split(task, split, raw, size, kind, native_mask):
+    """Cache resized inputs in half precision, preserving native evaluation masks.
+
+    Only development splits are cacheable. Cache identity includes source metadata,
+    preprocessing version and resolution. Normalization and random augmentation are
+    applied after cache reads. Cached tensors are mmap loaded to bound resident RAM.
+    """
+    if split not in {"train", "valid"}:
+        raise ValueError("Only development splits can be cached")
+    identity = {"task": task, "split": split, "size": size, "kind": kind,
+                "native_mask": native_mask, "source": fingerprint(task), "version": 1}
+    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:24]
+    root = data_root() / "_gotrain_cache"
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{task}-{split}-{key}.pt"
+    if not path.exists():
+        images, labels = [], []
+        for index in range(len(raw)):
+            sample = raw[index]
+            images.append(image_tensor(sample, size).half())
+            y = label_tensor(sample, kind)
+            if kind == "segmentation":
+                if not native_mask:
+                    y = F.interpolate(y[None, None].float(), (size, size), mode="nearest")[0, 0].long()
+                if bool(((y < 0) | (y > 255)).any()):
+                    raise ValueError("Cache supports masks with class IDs in [0,255]")
+                y = y.to(torch.uint8)
+            labels.append(y)
+        temporary = path.with_suffix(f".{os.getpid()}.tmp")
+        torch.save({"images": torch.stack(images), "labels": labels, "identity": identity}, temporary)
+        os.replace(temporary, path)
+    result = torch.load(path, map_location="cpu", weights_only=True, mmap=True)
+    if result["identity"] != identity:
+        raise RuntimeError("Dataset cache identity mismatch")
+    return result
+
+
 class GeoDataset(Dataset):
-    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False):
+    def __init__(self, raw, kind, size, stats, augment=False, native_mask=False, cache=None):
         self.raw, self.kind, self.size = raw, kind, size
         self.mean = torch.tensor(stats["mean"])[:, None, None]
         self.std = torch.tensor(stats["std"])[:, None, None]
         self.augment, self.native_mask = augment, native_mask
+        self.cache = cache
 
     def __len__(self):
         return len(self.raw)
 
     def __getitem__(self, index):
-        sample = self.raw[index]
-        x = image_tensor(sample, self.size)
-        y = label_tensor(sample, self.kind)
-        if self.kind == "segmentation" and not self.native_mask:
-            y = F.interpolate(y[None, None].float(), (self.size, self.size), mode="nearest")[0, 0].long()
+        if self.cache is not None:
+            x = self.cache["images"][index].float()
+            y = self.cache["labels"][index].long()
+        else:
+            sample = self.raw[index]
+            x = image_tensor(sample, self.size)
+            y = label_tensor(sample, self.kind)
+            if self.kind == "segmentation" and not self.native_mask:
+                y = F.interpolate(y[None, None].float(), (self.size, self.size), mode="nearest")[0, 0].long()
         if self.augment:
             for dim in [-1, -2]:
                 if torch.rand(()) < 0.5:

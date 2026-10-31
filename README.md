@@ -155,6 +155,11 @@ fixed where possible. Scores should eventually be checked across seeds if time p
   weights and scaled for the channel count. This is a documented initialization
   strategy, not a geospatial foundation model.
 * Image and mask augmentations remain aligned. Masks use nearest-neighbor resizing.
+* Resized development images use a versioned, memory-mapped float16 cache when the
+  estimated image payload is at most 2 GiB. Normalization and random augmentation
+  still happen at sample access. Validation masks retain their native resolution.
+  Larger recipes stream images instead. Set `cache: false` to disable this
+  optimization or to check sensitivity to cache quantization.
 * Validation/test segmentation predictions are resized to **native label resolution**
   before metrics. Training may use smaller masks to fit the GPU.
 * IoU is calculated from a dataset-wide confusion matrix, not averaged batch IoUs.
