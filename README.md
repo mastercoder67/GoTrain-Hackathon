@@ -25,8 +25,7 @@ use their recorded evidence rather than launching training or final evaluation.
 
 ### ✅ Rabih: remaining checklist before the presentation
 
-**Verified on SageMaker (31 October 2026):** the checklist is complete except
-for optional S3 verification, which requires an approved bucket. Memory now
+**Verified on SageMaker (31 October 2026):** the checklist is complete. Memory now
 contains **15 measured comparisons across all four tasks**. All four frozen
 selected models have validation diagnoses and passed model publish/restore
 checksum verification through the registry API. The chat and registry were
@@ -41,7 +40,7 @@ speaker notes are in `~/gotrain-release-verification/presentation/`. Open
 and open `/proxy/8765/` for the chat and registry. Historical logs without an
 explicit kept/rejected verdict display as completed, rather than inventing a verdict.
 The 15 memory records were reconstructed after freezing and did not influence
-the original scores. **S3 remains unverified.**
+the original scores.
 
 Everything below is safe after the final tests: no training, no test-split access.
 Run it in the Jupyter terminal after the update commands above.
@@ -74,23 +73,14 @@ Run it in the Jupyter terminal after the update commands above.
    "upload/download and model versions" extra points. Take screenshots.
    *Do not type training requests for the four frozen tasks; they are locked by design.*
 
-4. **S3 (extra points)**: ask RASID for an approved bucket. If they give one:
-
-   ```bash
-   export GOTRAIN_S3_BUCKET=THE_PROVIDED_BUCKET
-   python -m gotrain ui      # the registry then shows "S3 connected"; repeat step 3
-   ```
-
-   Without a bucket, say in the presentation that S3 code exists but is unverified.
-
-5. **Rebuild the demo dashboard** so it includes the new evidence, then check it
+4. **Rebuild the demo dashboard** so it includes the new evidence, then check it
    (command under **Simple demo interface**).
 
-6. **Presentation**: add one slide each for the AI-scientist loop (diagnose → hypothesis
+5. **Presentation**: add one slide each for the AI-scientist loop (diagnose → hypothesis
    → kept/rejected), the cross-task memory, and the chat + registry screenshots. State
    clearly that the final scores came from runs made **before** these features.
 
-7. **Never**: run `finalize` again, delete `final-selection.json` / `test-started.json`,
+6. **Never**: run `finalize` again, delete `final-selection.json` / `test-started.json`,
    create a new run root, or commit checkpoints, datasets or credentials.
 
 An autonomous geospatial model training agent for the AUB ACM × RASID hackathon.
@@ -105,8 +95,7 @@ separately from this source repository. The committed EuroSAT files under
 `results/validation-eurosat/` are validation evidence, not final test results.
 The scored runs predate the AI-scientist and memory/chat additions. Do not
 attribute those scores to newer features or repeat the once-only final tests.
-Filesystem model restore is verified. Real S3 transfer and GoPilot deployment
-remain unverified.
+Filesystem model restore is verified. GoPilot deployment remains unverified.
 
 ## Simple demo interface
 
@@ -144,7 +133,7 @@ and what it learned. Past sessions are in the sidebar; links like `?session=…`
 The **Model registry** view lists every version of every task with its validation score,
 lineage (warm start / inference variant), checksum and status badges (best, published,
 verified, frozen for test). Buttons publish or restore-and-verify models and datasets
-through the same filesystem/S3 code the agent uses, and each action, including failures,
+through the same storage code the agent uses, and each action, including failures,
 is logged to `registry-events.jsonl` and shown in a storage activity timeline.
 
 The UI only starts agent sessions; it has no test-split action. Without the server,
@@ -424,17 +413,9 @@ go into separate directories and cannot overwrite active experiment history.
 Dataset archives include the benchmark splits, but archive copying does not open
 test samples or compute test scores. Active datasets are reused from Hugging Face.
 
-For S3, ask the organizers for an approved bucket and execution-role access to
-`s3:PutObject` and `s3:GetObject` under its `gotrain/` prefix. Set:
-
-```bash
-export GOTRAIN_S3_BUCKET=THE_PROVIDED_BUCKET
-```
-
-The same commands then also upload/download through S3. No AWS keys in code,
-no bucket creation, no permission changes. S3 integration is implemented but must
-be exercised against the actual authorized bucket. It is not marked verified here.
-Model keys contain task and run ID. Dataset manifests record archive hashes.
+The storage layer also contains an optional S3 backend, switched off unless
+`GOTRAIN_S3_BUCKET` is set. It was not used in this project; all storage shown
+here is the filesystem. Model keys contain task and run ID. Dataset manifests record archive hashes.
 
 ## Demo: show evidence
 
@@ -483,7 +464,7 @@ Tests cover classification/segmentation forwards, tiny training runs, aligned ma
 train-only normalization, global IoU, checkpoint round trips and corruption, reports,
 and once-only final evaluation on **synthetic fixtures**. GitHub Actions runs CPU
 checks. SageMaker must validate real data, pretrained downloads, CUDA, Bedrock tool
-execution, S3 permissions, and the instructor's baseline comparison separately.
+execution and the instructor's baseline comparison separately.
 
 ### References
 
@@ -543,7 +524,7 @@ The current GitHub tree does not include the following deliverables:
 - A complete `submission/` export containing the final scores and agent-session logs.
 - The generated HTML reports and prediction examples for the final selected runs.
 - The final presentation/slide deck.
-- Real S3 round-trip evidence or a confirmed GoPilot deployment through RASID.
+- A confirmed GoPilot deployment through RASID.
 
 Some of these may exist in the SageMaker workspace. Export and verify them before
 marking them complete. Checkpoint weights, datasets, credentials and large archives
@@ -576,7 +557,7 @@ and datasets.
   finalization of any task that has not yet been tested. Generate reports, run
   `export`, check the submission's missing-task list, and assemble the final
   presentation from verified results only.
-- Confirm the real S3 bucket/role with RASID before testing S3. Confirm the required
+- Confirm the required
   transport and authentication with RASID before describing the MCP adapter as a
   completed GoPilot deployment.
 
@@ -670,7 +651,7 @@ GPU runs rather than launching multiple training jobs at once.
 
 - Training/tuning uses `train` and `valid`; never use `test` to choose a model.
 - Do not compare accuracy, foreground IoU or mean IoU as if they were the same metric.
-- Do not claim S3 or GoPilot production integration until tested with RASID's actual
-  approved bucket, role, transport and authentication.
+- Do not claim GoPilot production integration until tested with RASID's actual
+  transport and authentication.
 - Never commit AWS credentials, API keys, datasets, checkpoints or large archives.
 - Preserve the existing baseline, run directories, checkpoints and final-test markers.

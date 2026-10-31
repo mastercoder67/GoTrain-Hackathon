@@ -248,13 +248,13 @@ async function act(button, action, task, run_id) {
 }
 function tile(label, value, sub) { const t = el("div", "tile"); t.append(el("small", null, label), el("b", null, value)); if (sub) t.append(el("code", null, sub)); return t; }
 function renderRegistry(reg) {
-  setTitle("Model registry", reg.storage.s3_bucket ? "S3 + files" : "Files");
+  setTitle("Model registry", "Versioned");
   const all = reg.tasks.flatMap(t => t.versions), published = all.filter(v => v.published).length;
   $("meters").replaceChildren();
   const head = el("div", "reg-head");
   head.append(tile("Model versions", String(all.length), all.filter(v => v.status === "completed").length + " completed"),
     tile("Published", String(published), "…/" + reg.storage.filesystem.split(/[\\/]/).filter(Boolean).slice(-2).join("/")),
-    tile("Cloud storage", reg.storage.s3_bucket ? "S3 connected" : "S3 not set", reg.storage.s3_bucket ? "s3://" + reg.storage.s3_bucket + "/gotrain/" : "export GOTRAIN_S3_BUCKET=…"));
+    tile("Verified restores", String(all.filter(v => v.verified_at).length), "every checksum matched"));
   const parts = [head];
   reg.tasks.forEach(t => {
     const card = el("section", "task"), h = el("header");
