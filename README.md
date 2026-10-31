@@ -14,6 +14,25 @@ for all four tasks or a complete submission bundle. If final tests have already
 been run in SageMaker, recover and verify their original outputs rather than
 running them again. Never present validation metrics as test results.
 
+## Simple demo interface
+
+Build a self-contained HTML demo from your exported submission:
+
+```bash
+source ~/gotrain-env/bin/activate
+cd ~/GoTrain-Hackathon
+python -m gotrain.demo --submission ~/gotrain-release-verification/submission --out ~/gotrain-demo.html
+```
+
+Open `gotrain-demo.html` from JupyterLab with **Open in New Browser Tab**.
+The page includes a dataset selector, recorded agent-session replay, validation
+predictions, before/after examples where available, original final scores and
+saved software-check output. It needs no extra dependencies, web server or GPU.
+The replay reads existing logs. It does not launch the agent, train models or
+evaluate a benchmark split. The software checks shown in the UI are recorded
+outputs; use `pytest` and `gotrain smoke` in the terminal for a fresh check.
+Regenerate the page after exporting new evidence.
+
 ## The AI-scientist loop
 
 GoTrain does not only tune numbers; it investigates why a model fails and tests a fix:
